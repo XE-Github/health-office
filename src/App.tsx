@@ -1640,7 +1640,7 @@ function App() {
 
   const buildDiagnosticSnapshotText = () => {
     const lines = [
-      '# HO 调试快照',
+      '# 健康办公调试快照',
       `时间: ${new Date().toLocaleString('zh-CN')}`,
       `模式: ${demoMode ? 'Demo' : '真实'}`,
       `会话: ${sessionStarted ? '已开始' : '未开始'}`,

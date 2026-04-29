@@ -1,6 +1,6 @@
-# HO
+# 健康办公
 
-HO 是一个面向办公场景的健康微干预 Demo，围绕“状态感知 -> 风险触发 -> 即时提醒 -> 动作引导”形成闭环。项目使用 `React + TypeScript + Vite` 构建，并已接入 Electron，可打包为 Windows 免安装桌面应用。
+健康办公是一个面向办公场景的健康微干预 Demo，围绕“状态感知 -> 风险触发 -> 即时提醒 -> 动作引导”形成闭环。项目使用 `React + TypeScript + Vite` 构建，并已接入 Electron，可打包为 Windows 免安装桌面应用。
 
 ## 当前功能
 
@@ -92,7 +92,7 @@ npm run desktop:dir
 输出：
 
 ```text
-release/win-unpacked/HO.exe
+release/win-unpacked/健康办公.exe
 ```
 
 生成单文件 portable 包：
@@ -104,7 +104,7 @@ npm run desktop:build
 输出：
 
 ```text
-release/HO-0.0.0-portable.exe
+release/健康办公-0.0.0-portable.exe
 ```
 
 ## 摄像头权限
@@ -191,7 +191,7 @@ npm run verify
 
 ## 真实环境测试
 
-如果需要人工验证侧屏、姿态或眨眼表现，请按 [HO 真实环境测试流程](docs/real-world-test-flow.md) 执行。测试时可打开 HUD 并点击“复制快照”，把快照和问题编号一起反馈，便于快速定位。
+如果需要人工验证侧屏、姿态或眨眼表现，请按 [健康办公真实环境测试流程](docs/real-world-test-flow.md) 执行。测试时可打开 HUD 并点击“复制快照”，把快照和问题编号一起反馈，便于快速定位。
 
 ## 已知限制
 

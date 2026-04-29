@@ -1,8 +1,8 @@
 {
-  "name": "codexdemo1",
+  "name": "health-office",
   "private": true,
   "version": "0.0.0",
-  "description": "HO desktop office health micro-intervention demo.",
+  "description": "健康办公桌面办公健康微干预系统。",
   "author": "Codex Demo",
   "type": "module",
   "main": "electron/main.cjs",
@@ -20,8 +20,8 @@
     "verify": "npm run typecheck && npm run lint && npm run build && npm run smoke"
   },
   "build": {
-    "appId": "com.codex.health-office-demo",
-    "artifactName": "HO-${version}-portable.${ext}",
+    "appId": "com.codex.health-office",
+    "artifactName": "健康办公-${version}-portable.${ext}",
     "asar": true,
     "directories": {
       "output": "release"
@@ -31,7 +31,7 @@
       "electron/**",
       "package.json"
     ],
-    "productName": "HO",
+    "productName": "健康办公",
     "win": {
       "forceCodeSigning": false,
       "signAndEditExecutable": false,

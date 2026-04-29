@@ -1,4 +1,4 @@
-# HO 项目结构速查
+# 健康办公项目结构速查
 
 这份文档用于后续快速迭代时减少无关上下文读取。优先按需求类型打开对应模块，不要默认整段阅读 `App.tsx` 或 `usePoseMonitor.ts`。
 
@@ -11,7 +11,7 @@
 ## 样式层
 
 - `src/styles/app-layout.css`：全局页面宽度、viewport、主布局和 stacked 基础规则。
-- `src/styles/hero.css`：HO 主卡片、当前建议、校准卡片和 Demo 快捷触发。
+- `src/styles/hero.css`：健康办公主卡片、当前建议、校准卡片和 Demo 快捷触发。
 - `src/styles/density.css`：compact / tight 布局密度适配规则。
 - `src/styles/buttons.css`：按钮基础样式。
 - `src/styles/camera.css`：实时感知窗口、摄像头画面、HUD、校准完成提示。
@@ -25,7 +25,7 @@
 ## UI 层
 
 - `src/components/ui/AppPrimitives.tsx`：通用轻量 UI 原语，例如卡片、状态胶囊、输入项、开关、Demo 触发按钮。改设置卡片基础形态时优先看这里。
-- `src/components/OfficeHeroPanel.tsx`：左侧 HO 主卡片，包含开始办公、摄像头授权、Demo 模式、多屏配置入口、校准状态和 Demo 快捷触发。改 HO 卡片展示和入口文案时先看这里。
+- `src/components/OfficeHeroPanel.tsx`：左侧健康办公主卡片，包含开始办公、摄像头授权、Demo 模式、多屏配置入口、校准状态和 Demo 快捷触发。改主卡片展示和入口文案时先看这里。
 - `src/components/CameraPanel.tsx`：实时感知窗口展示层，包含摄像头画面、overlay canvas、HUD 开关、全屏按钮、摄像头状态与校准完成提示。改实时感知窗口布局时先看这里。
 - `src/components/SettingsPanel.tsx`：设置卡片展示层，包含连续用眼、低眨眼阈值、姿态提醒开关、视距阈值输入。改设置项布局与输入文案时先看这里。
 - `src/components/ReminderToast.tsx`：顶部轻提醒 Toast。改提醒外观与眨眼关闭展示时看这里。

@@ -70,7 +70,7 @@ export function OfficeHeroPanel({
   return (
     <div ref={heroCopyRef} className="hero-copy">
       <div className="hero-title-row">
-        <span className="hero-eyebrow">HO</span>
+          <span className="hero-eyebrow">健康办公</span>
         <div className="hero-mode-tabs" data-smoke="screen-mode-card">
           <button
             className={`hero-mode-tab ${screenMode === 'single' ? 'is-active' : ''}`}

@@ -15,7 +15,7 @@ function renderBootstrapLoading() {
     <div className="bootstrap-shell">
       <section className="bootstrap-card bootstrap-card-loading">
         <span className="bootstrap-eyebrow">Launching</span>
-        <h1>HO 正在启动。</h1>
+      <h1>健康办公正在启动。</h1>
         <p>正在初始化前端模块与实时感知能力，首次启动会稍慢一些。</p>
         <div className="bootstrap-loading">
           <span className="bootstrap-spinner" aria-hidden="true" />
