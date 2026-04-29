@@ -1,0 +1,138 @@
+﻿@media (min-width: 1080px) and (min-height: 720px) {
+  .app-shell {
+    height: calc(100dvh / var(--app-scale, 1));
+    display: grid;
+    grid-template-columns: minmax(460px, 0.46fr) minmax(560px, 0.54fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      'intro camera';
+    align-content: start;
+    gap: 10px 18px;
+    overflow: hidden;
+  }
+
+  .hero-panel {
+    display: contents;
+  }
+
+  .hero-copy {
+    grid-area: intro;
+    align-content: start;
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+
+  .hero-visual {
+    grid-area: camera;
+    min-height: 0;
+    height: auto;
+    align-self: start;
+  }
+
+  .camera-card {
+    height: auto;
+    align-self: start;
+  }
+
+  .camera-stage {
+    min-height: 0;
+  }
+
+  .camera-stage.is-windowed {
+    aspect-ratio: auto;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .hero-calibration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+}
+
+@media (max-width: 1100px) {
+  .hero-panel,
+  .settings-grid,
+  .settings-grid-card,
+  .hero-action-card {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    width: min(100%, calc(100% - 24px));
+    padding-top: 20px;
+  }
+
+  .hero-copy,
+  .camera-card,
+  .panel-card {
+    border-radius: 22px;
+  }
+
+  .hero-copy,
+  .camera-card,
+  .panel-card {
+    padding: 18px;
+  }
+
+  .hero-actions .button,
+  .toggle-chip,
+  .section-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .section-heading,
+  .section-actions {
+    flex-direction: column;
+  }
+
+  .camera-stage {
+    min-height: 260px;
+  }
+
+  .camera-debug-hud,
+  .camera-calibration-toast {
+    left: 12px;
+    right: 12px;
+    width: auto;
+  }
+
+  .reminder-toast-layer {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    transform: none;
+    width: auto;
+  }
+
+  .reminder-toast {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .reminder-toast-actions {
+    justify-items: center;
+    width: 100%;
+  }
+
+  .reminder-complete-button {
+    position: static;
+    inset: auto;
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+    width: 100%;
+  }
+
+  .reminder-blink-hint {
+    display: none;
+  }
+}

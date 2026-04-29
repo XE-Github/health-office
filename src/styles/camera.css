@@ -1,0 +1,291 @@
+﻿.camera-card,
+.panel-card {
+  padding: 16px;
+}
+
+.camera-card {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.section-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.section-heading > span,
+.section-copy > span {
+  color: var(--color-text-soft);
+  font-size: 0.95rem;
+}
+
+.section-subtitle {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.camera-stage {
+  position: relative;
+  min-height: 300px;
+  border-radius: 20px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(13, 25, 38, 0.74), rgba(13, 25, 38, 0.52)),
+    radial-gradient(circle at top, rgba(63, 118, 90, 0.22), transparent 44%),
+    #0e1822;
+}
+
+.camera-video,
+.camera-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.camera-video {
+  z-index: 1;
+  transform: scaleX(-1);
+}
+
+.camera-stage.is-windowed {
+  aspect-ratio: var(--camera-frame-ratio, 1.33);
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  min-height: 0;
+}
+
+.camera-overlay {
+  pointer-events: none;
+  z-index: 2;
+}
+
+.camera-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: rgba(241, 247, 251, 0.88);
+  z-index: 3;
+}
+
+.camera-placeholder strong {
+  font-size: 1.18rem;
+}
+
+.camera-placeholder em {
+  font-style: normal;
+  color: rgba(208, 220, 227, 0.82);
+}
+
+.camera-hint {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(10, 18, 28, 0.64);
+  color: rgba(241, 247, 251, 0.92);
+  backdrop-filter: blur(8px);
+  z-index: 3;
+}
+
+.camera-debug-hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 3;
+  width: min(452px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(38, 41, 49, 0.88);
+  border: 1px solid rgba(117, 143, 161, 0.2);
+  color: rgba(240, 246, 250, 0.96);
+  box-shadow: 0 18px 32px rgba(8, 12, 18, 0.26);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  scrollbar-gutter: stable;
+  contain: layout paint style;
+  isolation: isolate;
+  will-change: transform;
+  backface-visibility: hidden;
+  pointer-events: none;
+}
+
+.camera-debug-sections {
+  display: grid;
+  gap: 10px;
+}
+
+.camera-debug-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.camera-debug-section + .camera-debug-section {
+  border-top: 1px solid rgba(121, 144, 159, 0.16);
+  padding-top: 10px;
+}
+
+.camera-debug-section-title {
+  color: rgba(204, 219, 228, 0.72);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.camera-debug-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  pointer-events: auto;
+}
+
+.camera-debug-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.camera-debug-copy {
+  border: 1px solid rgba(183, 204, 216, 0.32);
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(238, 247, 250, 0.94);
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.camera-debug-copy:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.camera-debug-hud.is-draggable .camera-debug-header {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.camera-debug-hud.is-draggable .camera-debug-header:active {
+  cursor: grabbing;
+}
+
+.camera-debug-hud.is-floating {
+  position: fixed;
+  z-index: 36;
+  width: min(452px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overscroll-behavior: contain;
+}
+
+.camera-debug-header strong {
+  font-size: 0.94rem;
+}
+
+.camera-debug-header span {
+  color: rgba(198, 214, 223, 0.82);
+  font-size: 0.78rem;
+}
+
+.camera-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.camera-debug-row {
+  display: grid;
+  gap: 4px;
+  align-items: start;
+  font-size: 0.84rem;
+}
+
+.camera-debug-row span {
+  color: rgba(194, 210, 220, 0.76);
+}
+
+.camera-debug-row strong {
+  max-width: none;
+  text-align: left;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.camera-stage-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  display: none;
+  align-items: center;
+  gap: 10px;
+}
+
+.camera-calibration-toast {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 90px;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(65, 110, 85, 0.88);
+  color: #eff8f1;
+  box-shadow: 0 18px 34px rgba(26, 53, 40, 0.24);
+}
+
+.camera-calibration-toast strong {
+  font-size: 0.95rem;
+}
+
+.camera-calibration-toast span {
+  color: rgba(234, 246, 238, 0.92);
+  font-size: 0.84rem;
+}
+
+.camera-hint strong {
+  font-size: 0.95rem;
+}
+
+.camera-hint span {
+  color: rgba(214, 225, 233, 0.86);
+  font-size: 0.84rem;
+}
+

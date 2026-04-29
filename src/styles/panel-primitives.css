@@ -1,0 +1,85 @@
+﻿.panel-header h3 {
+  margin: 6px 0 0;
+  font-size: 1.02rem;
+}
+
+.panel-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.accent-ok::before,
+.accent-warn::before,
+.accent-danger::before,
+.accent-neutral::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  border-radius: 999px;
+}
+
+.accent-ok::before {
+  background: linear-gradient(180deg, #76c398, #4d8a68);
+}
+
+.accent-warn::before {
+  background: linear-gradient(180deg, #f0b65b, #d18c32);
+}
+
+.accent-danger::before {
+  background: linear-gradient(180deg, #ec7e5e, #cf6041);
+}
+
+.accent-neutral::before {
+  background: linear-gradient(180deg, #a4b8c7, #788fa1);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.tone-ok {
+  color: #1d5a3d;
+  background: rgba(111, 178, 141, 0.16);
+}
+
+.tone-warn {
+  color: #8d5b12;
+  background: rgba(232, 185, 102, 0.18);
+}
+
+.tone-danger {
+  color: #983c2c;
+  background: rgba(217, 111, 75, 0.18);
+}
+
+.tone-neutral {
+  color: #405364;
+  background: rgba(160, 181, 198, 0.18);
+}
+
+.toggle-chip {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(73, 104, 84, 0.18);
+  background: rgba(248, 250, 252, 0.95);
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.toggle-chip.active {
+  color: #1f5f41;
+  background: rgba(216, 235, 224, 0.94);
+  box-shadow: inset 0 0 0 1px rgba(95, 146, 116, 0.18);
+}
+

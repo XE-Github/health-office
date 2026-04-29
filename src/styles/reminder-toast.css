@@ -1,0 +1,114 @@
+﻿.reminder-toast-layer {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  width: min(820px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.reminder-toast {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(247, 250, 253, 0.16)),
+    rgba(242, 247, 251, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 14px 30px rgba(13, 26, 39, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  pointer-events: auto;
+  text-align: center;
+}
+
+.reminder-toast-strong {
+  box-shadow:
+    0 20px 44px rgba(13, 26, 39, 0.16),
+    inset 0 0 0 1px rgba(214, 122, 88, 0.26);
+}
+
+.reminder-toast-content {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+  justify-items: center;
+}
+
+.reminder-toast-content > strong {
+  color: var(--color-ink);
+  font-size: 0.96rem;
+  line-height: 1.35;
+}
+
+.reminder-toast-content > small {
+  color: rgba(64, 84, 99, 0.8);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  max-width: 40ch;
+}
+
+.reminder-toast-actions {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 128px;
+  min-height: 42px;
+  flex-shrink: 0;
+}
+
+.reminder-complete-button {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  width: 100%;
+  padding: 8px 14px;
+  text-align: center;
+  box-shadow: 0 10px 20px rgba(43, 94, 70, 0.14);
+  opacity: 0;
+  transform: translateY(-3px) scale(0.98);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.reminder-blink-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(62, 80, 95, 0.72);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  text-align: center;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.reminder-toast:hover .reminder-complete-button,
+.reminder-toast:focus-within .reminder-complete-button {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.reminder-toast:hover .reminder-blink-hint,
+.reminder-toast:focus-within .reminder-blink-hint {
+  opacity: 0;
+  transform: translateY(3px);
+  pointer-events: none;
+}
+

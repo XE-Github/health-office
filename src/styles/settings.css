@@ -1,0 +1,222 @@
+﻿.settings-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-grid-single {
+  grid-template-columns: 1fr;
+}
+
+.settings-grid-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.settings-grid-card-core {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-grid-card-distance {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 2px;
+}
+
+.settings-grid-card-posture {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.setting-field {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(218, 228, 236, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.setting-label {
+  color: var(--color-ink);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.setting-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.setting-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(188, 203, 214, 0.78);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.setting-input-row strong {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  color: var(--color-ink);
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.setting-field small {
+  color: var(--color-text-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.setting-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(218, 228, 236, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
+.setting-switch > div {
+  display: grid;
+  gap: 4px;
+}
+
+.setting-switch small {
+  color: var(--color-text-soft);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.setting-switch-control {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 64px;
+  padding: 4px 6px 4px 8px;
+  border: 1px solid rgba(166, 184, 197, 0.86);
+  border-radius: 999px;
+  background: rgba(235, 241, 246, 0.92);
+  color: #5d6e7c;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.setting-switch-control i {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 3px 10px rgba(39, 55, 70, 0.16);
+}
+
+.setting-switch-control.active {
+  border-color: rgba(74, 139, 99, 0.45);
+  background: rgba(213, 235, 222, 0.96);
+  color: #1f5f41;
+}
+
+.settings-inline-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 10px;
+  margin-top: 0;
+  padding: 12px;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(250, 252, 254, 0.94), rgba(242, 247, 250, 0.9));
+  border: 1px solid rgba(214, 226, 235, 0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 10px 24px rgba(52, 72, 88, 0.05);
+}
+
+.settings-inline-header {
+  display: grid;
+  gap: 4px;
+}
+
+.settings-inline-header strong {
+  color: var(--color-ink);
+  font-size: 0.9rem;
+}
+
+.settings-inline-header small,
+.settings-inline-note {
+  color: var(--color-text-soft);
+}
+
+.settings-modal-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(18, 29, 39, 0.28);
+  backdrop-filter: blur(10px);
+}
+
+.settings-modal-card {
+  width: min(1120px, calc(100vw - 48px));
+  max-height: min(780px, calc(100dvh - 48px));
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 253, 0.94)),
+    rgba(255, 255, 255, 0.86);
+  box-shadow:
+    0 28px 78px rgba(12, 25, 37, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.settings-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settings-modal-header h2 {
+  margin: 6px 0 0;
+  font-size: 1.34rem;
+  letter-spacing: -0.04em;
+}
+
+.settings-modal-card .workspace-grid {
+  margin-top: 0;
+}
+
+.settings-modal-card .panel-card {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.settings-modal-card .panel-header {
+  display: none;
+}
+
+.settings-modal-card .panel-body {
+  display: grid;
+  gap: 12px;
+}
+

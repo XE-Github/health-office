@@ -1,0 +1,76 @@
+﻿.camera-card:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background:
+    linear-gradient(180deg, rgba(9, 17, 26, 0.96), rgba(11, 20, 30, 0.98)),
+    #09111a;
+}
+
+.camera-card:fullscreen .section-heading {
+  display: none;
+}
+
+.camera-card:fullscreen .section-copy > span,
+.camera-card:fullscreen .section-subtitle {
+  color: rgba(224, 235, 242, 0.88);
+}
+
+.camera-card:fullscreen .camera-stage {
+  min-height: 100vh;
+  height: 100vh;
+  border-radius: 0;
+}
+
+.camera-card:fullscreen .camera-debug-hud {
+  top: 24px;
+  left: 24px;
+  width: min(452px, calc(100% - 120px));
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(38, 41, 49, 0.72);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.camera-card:fullscreen .camera-debug-hud.is-floating {
+  width: min(452px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+.camera-card:fullscreen .camera-debug-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.camera-card:fullscreen .camera-debug-section + .camera-debug-section {
+  padding-top: 12px;
+}
+
+.camera-card:fullscreen .camera-debug-row {
+  display: grid;
+  justify-content: flex-start;
+  gap: 2px;
+  align-items: start;
+}
+
+.camera-card:fullscreen .camera-debug-row strong {
+  max-width: none;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.camera-card:fullscreen .camera-stage-controls {
+  display: flex;
+}
+
+.camera-card:fullscreen .camera-calibration-toast {
+  left: 24px;
+  right: auto;
+  bottom: 24px;
+  width: min(420px, calc(100% - 48px));
+}
+
