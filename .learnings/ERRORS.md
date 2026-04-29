@@ -286,6 +286,40 @@ Get-ChildItem : 找不到接受实际参数“docs”的位置形式参数。
 ### Resolution
 - **Resolved**: 2026-04-29T00:00:00+08:00
 - **Notes**: 后续多目录检索统一改用 `-Path @(...)` 写法。
+
+---
+
+## [ERR-20260429-002] github-push-schannel-tls-failure
+
+**Logged**: 2026-04-29T00:00:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+本机已登录 GitHub，`gh repo create --push` 仍可能在 Windows `schannel` TLS 握手阶段失败，导致仓库创建成功但首推失败。
+
+### Error
+```text
+fatal: unable to access 'https://github.com/XE-Github/codexdemo1.git/': schannel: failed to receive handshake, SSL/TLS connection failed
+```
+
+### Context
+- Command attempted: `gh repo create XE-Github/codexdemo1 --private --source . --remote origin --push`
+- Result: GitHub 仓库已创建成功，但 Git push 阶段失败
+- Verification: `git -c http.sslBackend=openssl ls-remote https://github.com/XE-Github/codexdemo1.git` 可以正常访问
+
+### Suggested Fix
+- 对当前仓库设置 `git config http.sslBackend openssl`
+- 然后重新执行 `git push -u origin main`
+
+### Metadata
+- Reproducible: yes
+- Related Files: .learnings/ERRORS.md
+
+### Resolution
+- **Resolved**: 2026-04-29T00:00:00+08:00
+- **Notes**: 此机器后续遇到同类 GitHub TLS 握手失败，可优先切换到 `openssl` 后端重试。
 - Related Files: D:\codexdemo1
 
 ---
