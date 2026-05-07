@@ -533,3 +533,24 @@ The previous CSS 3D board used the same pointer surface for rotating the scene a
 - Pattern-Key: workspace.spatial-editor-use-raycasted-three-module
 
 ---
+
+## [LRN-20260507-001] correction
+
+**Logged**: 2026-05-07T00:00:00+08:00
+**Priority**: medium
+**Status**: pending
+**Area**: frontend
+
+### Summary
+Multi-screen config numeric inputs should not show draft values that are ahead of the rendered 3D board state.
+
+### Details
+The user reported that editing Space X/Y/Z could leave the parameter card and the canvas temporarily inconsistent until refresh. The cause was draft-only numeric input: the card showed `numericDrafts`, while the actual layout and Three.js board were only updated on blur/Enter.
+
+### Suggested Action
+For visual configuration panels, commit finite numeric values live while still preserving draft handling for incomplete input states such as empty, `-`, or `.`. Add smoke probes that assert committed board state changes before blur/Enter.
+
+### Metadata
+- Source: user_feedback
+- Related Files: src/components/WorkspaceThreeBoard.tsx, scripts/smoke-ui.cjs
+- Tags: react, threejs, controlled-input, regression-test

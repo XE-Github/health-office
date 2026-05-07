@@ -1,6 +1,9 @@
 import {
   useEffect,
   useRef,
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import {
@@ -32,6 +35,8 @@ import {
   type Texture,
 } from 'three'
 import type { WorkspaceLayoutConfig, WorkspaceScreenConfig } from '../lib/workspaceConfig'
+import type { WorkspaceLayoutProfile } from '../lib/workspaceLayoutProfiles'
+import { formatWorkspaceLayoutProfileSummary } from '../lib/workspaceLayoutProfiles'
 import {
   createWorkspaceScreenRectPatch,
   createWorkspaceScreenSizePatch,
@@ -54,14 +59,27 @@ export type WorkspaceScreenCalibrationVisual = {
 }
 
 type WorkspaceThreeBoardProps = {
+  activeLayoutProfileId: string | null
   canAddScreen: boolean
+  canUpdateLayoutProfile: boolean
+  currentWorkspaceStatusLabel: string
+  isLayoutProfileDirty: boolean
   layout: WorkspaceLayoutConfig
+  layoutProfileCreateLabel: string
+  layoutProfiles: WorkspaceLayoutProfile[]
+  layoutProfileUpdateLabel: string
   onAddScreen: () => void
+  onApplyLayoutProfile: (profileId: string) => void
   onCalibrateScreen: (screenId: string) => void
+  onCreateLayoutProfile: () => void
+  onDeleteLayoutProfile: (profileId: string) => void
   onDeleteScreen: (screenId: string) => void
+  onExportLayoutProfile: (profileId: string) => void
+  onImportLayoutProfile: (file: File) => void
   onResetView: () => void
   onSelectScreen: (screenId: string) => void
   onSetCameraScreen: (screenId: string) => void
+  onUpdateLayoutProfile: () => void
   onUpdateScreen: (screenId: string, patch: Partial<WorkspaceScreenConfig>) => void
   onViewChange: (view: WorkspaceSceneView) => void
   screenStates: Record<string, WorkspaceScreenCalibrationVisual>
@@ -102,11 +120,22 @@ type ViewDragState = {
   startY: number
 }
 
+type NumericEditorField =
+  | 'depth'
+  | 'diagonalInches'
+  | 'height'
+  | 'pitchDeg'
+  | 'width'
+  | 'x'
+  | 'y'
+  | 'yawDeg'
+
 type RuntimeProps = WorkspaceThreeBoardProps
 
 type ThreeRuntime = {
   camera: PerspectiveCamera
   pickTargets: Mesh[]
+  previewGroup: Group
   renderer: WebGLRenderer
   scene: Scene
   screenGroup: Group
@@ -126,6 +155,40 @@ function clamp(value: number, min: number, max: number) {
 
 function roundToStep(value: number, step: number) {
   return Math.round(value / step) * step
+}
+
+function removeSignedZero(value: number) {
+  return Object.is(value, -0) ? 0 : value
+}
+
+function getScreenSpacePosition(screen: WorkspaceScreenConfig) {
+  return {
+    x: removeSignedZero(Math.round(screen.x + screen.width / 2 - boardBounds.width / 2)),
+    y: removeSignedZero(Math.round(boardBounds.height / 2 - (screen.y + screen.height / 2))),
+    z: removeSignedZero(Math.round(screen.depth)),
+  }
+}
+
+function createScreenSpacePatch(
+  screen: WorkspaceScreenConfig,
+  field: 'depth' | 'x' | 'y',
+  value: number,
+) {
+  if (field === 'depth') {
+    return {
+      depth: Math.round(value),
+    }
+  }
+
+  if (field === 'x') {
+    return {
+      x: boardBounds.width / 2 + value - screen.width / 2,
+    }
+  }
+
+  return {
+    y: boardBounds.height / 2 - value - screen.height / 2,
+  }
 }
 
 function screenToWorld(screen: WorkspaceScreenConfig) {
@@ -185,11 +248,21 @@ function createGridPlane(width: number, height: number, xSteps: number, ySteps: 
 
 function createTextTexture(
   title: string | string[],
-  options?: { camera?: boolean; selected?: boolean },
+  options?: {
+    aspectRatio?: number
+    backgroundColor?: string
+    borderColor?: string
+    textColor?: string
+  },
 ) {
   const canvas = document.createElement('canvas')
-  canvas.width = 680
-  canvas.height = 220
+  const aspectRatio = options?.aspectRatio && Number.isFinite(options.aspectRatio)
+    ? clamp(options.aspectRatio, 0.25, 4)
+    : 16 / 9
+  const textureHeight = 512
+  const textureWidth = Math.round(textureHeight * aspectRatio)
+  canvas.width = textureWidth
+  canvas.height = textureHeight
   const context = canvas.getContext('2d')
 
   if (!context) {
@@ -197,27 +270,42 @@ function createTextTexture(
   }
 
   context.clearRect(0, 0, canvas.width, canvas.height)
-  context.fillStyle = options?.selected
-    ? '#e9f2ff'
-    : options?.camera
-      ? '#e5f4ec'
-      : '#f7fafc'
-  context.strokeStyle = options?.selected
-    ? '#4a83d8'
-    : options?.camera
-      ? '#5d936f'
-      : '#cbd7e1'
-  context.lineWidth = 8
+  context.fillStyle = options?.backgroundColor ?? '#f7fafc'
+  context.strokeStyle = options?.borderColor ?? '#cbd7e1'
+  context.lineWidth = Math.max(8, Math.round(Math.min(canvas.width, canvas.height) * 0.025))
+  const padding = Math.max(24, Math.round(Math.min(canvas.width, canvas.height) * 0.08))
+  const radius = Math.max(28, Math.round(Math.min(canvas.width, canvas.height) * 0.12))
   context.beginPath()
-  context.roundRect(18, 18, canvas.width - 36, canvas.height - 36, 34)
+  context.roundRect(
+    padding,
+    padding,
+    canvas.width - padding * 2,
+    canvas.height - padding * 2,
+    radius,
+  )
   context.fill()
   context.stroke()
 
-  context.fillStyle = '#162433'
-  context.font = 'bold 54px sans-serif'
+  context.fillStyle = options?.textColor ?? '#162433'
   context.textAlign = 'center'
   context.textBaseline = 'middle'
   const resolvedTitle = Array.isArray(title) ? title[0] ?? '' : title
+  const maxTextWidth = Math.max(24, canvas.width - padding * 2.8)
+  const maxFontSize = Math.max(42, Math.min(118, Math.round(canvas.height * 0.24)))
+  const minFontSize = 34
+  let fontSize = maxFontSize
+
+  while (fontSize > minFontSize) {
+    context.font = `bold ${fontSize}px sans-serif`
+
+    if (context.measureText(resolvedTitle).width <= maxTextWidth) {
+      break
+    }
+
+    fontSize -= 4
+  }
+
+  context.font = `bold ${fontSize}px sans-serif`
   context.fillText(resolvedTitle, canvas.width / 2, canvas.height / 2)
 
   const texture = new CanvasTexture(canvas)
@@ -362,15 +450,72 @@ function getDepthGestureDelta(deltaX: number, deltaY: number, viewYaw: number) {
   return -deltaY
 }
 
+function getScreenCalibrationPalette(stateClassName?: string) {
+  switch (stateClassName) {
+    case 'is-ready':
+      return {
+        backgroundColor: '#e4f3ea',
+        borderColor: '#6d987f',
+      }
+    case 'is-sampling':
+      return {
+        backgroundColor: '#fff2de',
+        borderColor: '#c58b34',
+      }
+    case 'is-partial':
+      return {
+        backgroundColor: '#f2efff',
+        borderColor: '#8a7ec4',
+      }
+    default:
+      return {
+        backgroundColor: '#fdecee',
+        borderColor: '#c97a88',
+      }
+  }
+}
+
+function getLayoutPreviewPalette() {
+  return {
+    backgroundColor: '#edf4ff',
+    borderColor: '#7f99c9',
+  }
+}
+
+function getWorkspaceStatusTone(statusLabel: string) {
+  if (statusLabel.includes('未进入可靠范围') || statusLabel.includes('未识别')) {
+    return 'is-warning'
+  }
+
+  if (statusLabel.includes('切换')) {
+    return 'is-transition'
+  }
+
+  return 'is-active'
+}
+
 export function WorkspaceThreeBoard({
+  activeLayoutProfileId,
   canAddScreen,
+  canUpdateLayoutProfile,
+  currentWorkspaceStatusLabel,
+  isLayoutProfileDirty,
   layout,
+  layoutProfileCreateLabel,
+  layoutProfiles,
+  layoutProfileUpdateLabel,
   onAddScreen,
+  onApplyLayoutProfile,
   onCalibrateScreen,
+  onCreateLayoutProfile,
+  onDeleteLayoutProfile,
   onDeleteScreen,
+  onExportLayoutProfile,
+  onImportLayoutProfile,
   onResetView,
   onSelectScreen,
   onSetCameraScreen,
+  onUpdateLayoutProfile,
   onUpdateScreen,
   onViewChange,
   screenStates,
@@ -381,16 +526,30 @@ export function WorkspaceThreeBoard({
   view,
 }: WorkspaceThreeBoardProps) {
   const canvasHostRef = useRef<HTMLDivElement | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
   const runtimeRef = useRef<ThreeRuntime | null>(null)
   const propsRef = useRef<RuntimeProps>({
+    activeLayoutProfileId,
     canAddScreen,
+    canUpdateLayoutProfile,
+    currentWorkspaceStatusLabel,
+    isLayoutProfileDirty,
     layout,
+    layoutProfileCreateLabel,
+    layoutProfiles,
+    layoutProfileUpdateLabel,
     onAddScreen,
+    onApplyLayoutProfile,
     onCalibrateScreen,
+    onCreateLayoutProfile,
+    onDeleteLayoutProfile,
     onDeleteScreen,
+    onExportLayoutProfile,
+    onImportLayoutProfile,
     onResetView,
     onSelectScreen,
     onSetCameraScreen,
+    onUpdateLayoutProfile,
     onUpdateScreen,
     onViewChange,
     screenStates,
@@ -403,22 +562,45 @@ export function WorkspaceThreeBoard({
   const dragRef = useRef<DragState | null>(null)
   const viewDragRef = useRef<ViewDragState | null>(null)
   const controlDragRef = useRef<ControlDragState | null>(null)
+  const [hoveredLayoutProfileId, setHoveredLayoutProfileId] = useState<string | null>(null)
+  const [numericDrafts, setNumericDrafts] = useState<Record<string, string>>({})
   const selectedScreen =
     layout.screens.find((screen) => screen.id === selectedScreenId) ?? layout.screens[0] ?? null
   const canDeleteSelectedScreen = layout.screens.length > 1 && Boolean(selectedScreen)
   const canResetView = Math.abs(view.pitch) > 0.01 || Math.abs(view.yaw) > 0.01
   const selectedScreenState = selectedScreen ? screenStates[selectedScreen.id] : null
+  const selectedScreenSpacePosition = selectedScreen
+    ? getScreenSpacePosition(selectedScreen)
+    : null
+  const currentWorkspaceStatusTone = getWorkspaceStatusTone(currentWorkspaceStatusLabel)
+  const hoveredLayoutProfile =
+    hoveredLayoutProfileId === null
+      ? null
+      : layoutProfiles.find((profile) => profile.id === hoveredLayoutProfileId) ?? null
 
   useEffect(() => {
     propsRef.current = {
+      activeLayoutProfileId,
       canAddScreen,
+      canUpdateLayoutProfile,
+      currentWorkspaceStatusLabel,
+      isLayoutProfileDirty,
       layout,
+      layoutProfileCreateLabel,
+      layoutProfiles,
+      layoutProfileUpdateLabel,
       onAddScreen,
+      onApplyLayoutProfile,
       onCalibrateScreen,
+      onCreateLayoutProfile,
+      onDeleteLayoutProfile,
       onDeleteScreen,
+      onExportLayoutProfile,
+      onImportLayoutProfile,
       onResetView,
       onSelectScreen,
       onSetCameraScreen,
+      onUpdateLayoutProfile,
       onUpdateScreen,
       onViewChange,
       screenStates,
@@ -429,14 +611,27 @@ export function WorkspaceThreeBoard({
       view,
     }
   }, [
+    activeLayoutProfileId,
     canAddScreen,
+    canUpdateLayoutProfile,
+    currentWorkspaceStatusLabel,
+    isLayoutProfileDirty,
     layout,
+    layoutProfileCreateLabel,
+    layoutProfiles,
+    layoutProfileUpdateLabel,
     onAddScreen,
+    onApplyLayoutProfile,
     onCalibrateScreen,
+    onCreateLayoutProfile,
+    onDeleteLayoutProfile,
     onDeleteScreen,
+    onExportLayoutProfile,
+    onImportLayoutProfile,
     onResetView,
     onSelectScreen,
     onSetCameraScreen,
+    onUpdateLayoutProfile,
     onUpdateScreen,
     onViewChange,
     screenStates,
@@ -466,13 +661,16 @@ export function WorkspaceThreeBoard({
 
     const scene = new Scene()
     const camera = new PerspectiveCamera(42, 1, 1, 3000)
+    const previewGroup = new Group()
     const screenGroup = new Group()
     scene.add(createSpaceBoxGroup())
+    scene.add(previewGroup)
     scene.add(screenGroup)
 
     const runtime: ThreeRuntime = {
       camera,
       pickTargets: [],
+      previewGroup,
       renderer,
       scene,
       screenGroup,
@@ -622,6 +820,8 @@ export function WorkspaceThreeBoard({
 
     layout.screens.forEach((screen) => {
       const isSelected = screen.id === selectedScreenId
+      const calibrationState = screenStates[screen.id]
+      const calibrationPalette = getScreenCalibrationPalette(calibrationState?.className)
       const screenRoot = new Group()
       screenRoot.position.copy(screenToWorld(screen))
       screenRoot.rotation.set(
@@ -631,12 +831,13 @@ export function WorkspaceThreeBoard({
       )
 
       const screenMaterial = new MeshBasicMaterial({
-        color: isSelected ? 0xe9f2ff : screen.kind === 'camera' ? 0xdff0e7 : 0xf6fafc,
+        color: 0xffffff,
         depthTest: true,
         depthWrite: true,
         map: createTextTexture(screen.name, {
-          camera: screen.kind === 'camera',
-          selected: isSelected,
+          aspectRatio: screen.width / screen.height,
+          backgroundColor: calibrationPalette.backgroundColor,
+          borderColor: calibrationPalette.borderColor,
         }),
         side: DoubleSide,
       })
@@ -652,7 +853,7 @@ export function WorkspaceThreeBoard({
       const outline = new LineSegments(
         new EdgesGeometry(new PlaneGeometry(screen.width, screen.height)),
         new LineBasicMaterial({
-          color: isSelected ? 0x4a83d8 : screen.kind === 'camera' ? 0x5d936f : 0x90a4b8,
+          color: isSelected ? 0x4a83d8 : Number(`0x${calibrationPalette.borderColor.slice(1)}`),
           linewidth: 2,
         }),
       )
@@ -660,7 +861,66 @@ export function WorkspaceThreeBoard({
       screenRoot.add(outline)
       runtime.screenGroup.add(screenRoot)
     })
-  }, [layout, selectedScreenId])
+  }, [layout, screenStates, selectedScreenId])
+
+  useEffect(() => {
+    const runtime = runtimeRef.current
+
+    if (!runtime) {
+      return
+    }
+
+    runtime.previewGroup.children.forEach((child) => disposeObject(child))
+    runtime.previewGroup.clear()
+
+    if (!hoveredLayoutProfile || hoveredLayoutProfile.id === activeLayoutProfileId) {
+      return
+    }
+
+    const previewPalette = getLayoutPreviewPalette()
+
+    hoveredLayoutProfile.layout.screens.forEach((screen) => {
+      const screenRoot = new Group()
+      screenRoot.position.copy(screenToWorld(screen))
+      screenRoot.rotation.set(
+        MathUtils.degToRad(screen.pitchDeg),
+        MathUtils.degToRad(screen.yawDeg),
+        0,
+      )
+
+      const previewMaterial = new MeshBasicMaterial({
+        color: 0xffffff,
+        depthTest: true,
+        depthWrite: false,
+        map: createTextTexture(screen.name, {
+          ...previewPalette,
+          aspectRatio: screen.width / screen.height,
+        }),
+        opacity: 0.36,
+        side: DoubleSide,
+        transparent: true,
+      })
+      const previewMesh = new Mesh(
+        new PlaneGeometry(screen.width, screen.height),
+        previewMaterial,
+      )
+      previewMesh.rotation.y = Math.PI
+      screenRoot.add(previewMesh)
+
+      const previewOutline = new LineSegments(
+        new EdgesGeometry(new PlaneGeometry(screen.width, screen.height)),
+        new LineBasicMaterial({
+          color: Number(`0x${previewPalette.borderColor.slice(1)}`),
+          opacity: 0.7,
+          transparent: true,
+        }),
+      )
+      previewOutline.position.z = 0.4
+      screenRoot.add(previewOutline)
+
+      runtime.previewGroup.add(screenRoot)
+    })
+  }, [activeLayoutProfileId, hoveredLayoutProfile])
 
   const handleViewPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0) {
@@ -801,7 +1061,78 @@ export function WorkspaceThreeBoard({
     onUpdateScreen(selectedScreen.id, patch)
   }
 
-  const handleMetricInput =
+  const getNumericDraftKey = (field: NumericEditorField) =>
+    selectedScreen ? `${selectedScreen.id}:${field}` : field
+
+  const getNumericInputValue = (field: NumericEditorField, value: number) => {
+    const draftValue = numericDrafts[getNumericDraftKey(field)]
+
+    return draftValue ?? String(removeSignedZero(value))
+  }
+
+  const updateNumericDraft = (field: NumericEditorField, value: string) => {
+    const key = getNumericDraftKey(field)
+
+    setNumericDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [key]: value,
+    }))
+  }
+
+  const isCommittableNumericDraft = (value: string) => {
+    const trimmedValue = value.trim()
+
+    return (
+      trimmedValue !== '' &&
+      trimmedValue !== '-' &&
+      trimmedValue !== '+' &&
+      trimmedValue !== '.' &&
+      trimmedValue !== '-.' &&
+      trimmedValue !== '+.' &&
+      Number.isFinite(Number(trimmedValue))
+    )
+  }
+
+  const handleNumericChange =
+    (field: NumericEditorField, commitValue: (value: string) => void) =>
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value
+
+      updateNumericDraft(field, nextValue)
+
+      if (isCommittableNumericDraft(nextValue)) {
+        commitValue(nextValue)
+      }
+    }
+
+  const clearNumericDraft = (field: NumericEditorField) => {
+    const key = getNumericDraftKey(field)
+
+    setNumericDrafts((currentDrafts) => {
+      if (!(key in currentDrafts)) {
+        return currentDrafts
+      }
+
+      const nextDrafts = { ...currentDrafts }
+      delete nextDrafts[key]
+      return nextDrafts
+    })
+  }
+
+  const handleNumericKeyDown =
+    (field: NumericEditorField) => (event: ReactKeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Enter') {
+        event.currentTarget.blur()
+        return
+      }
+
+      if (event.key === 'Escape') {
+        clearNumericDraft(field)
+        event.currentTarget.blur()
+      }
+    }
+
+  const commitMetricInput =
     (field: 'depth' | 'pitchDeg' | 'x' | 'y' | 'yawDeg') =>
     (value: string) => {
       if (!selectedScreen || value.trim() === '') {
@@ -810,14 +1141,35 @@ export function WorkspaceThreeBoard({
 
       const nextValue = Number(value)
 
-      if (!Number.isFinite(nextValue)) {
+        if (!Number.isFinite(nextValue)) {
+          return
+        }
+
+      if (field === 'depth' || field === 'x' || field === 'y') {
+        updateSelectedScreen(createScreenSpacePatch(selectedScreen, field, nextValue))
         return
       }
 
       updateSelectedScreen({ [field]: Math.round(nextValue) } as Partial<WorkspaceScreenConfig>)
     }
 
-  const handleSizeInput =
+  const commitNumericInput = (
+    field: NumericEditorField,
+    commitValue: (value: string) => void,
+  ) => {
+    const key = getNumericDraftKey(field)
+    const draftValue = numericDrafts[key]
+
+    clearNumericDraft(field)
+
+    if (draftValue === undefined) {
+      return
+    }
+
+    commitValue(draftValue)
+  }
+
+  const commitSizeInput =
     (field: 'diagonalInches' | 'height' | 'width') =>
     (value: string) => {
       if (!selectedScreen || value.trim() === '') {
@@ -840,6 +1192,31 @@ export function WorkspaceThreeBoard({
       updateSelectedScreen(createWorkspaceScreenRectPatch(nextWidth, nextHeight))
     }
 
+  const rotateSelectedScreenClockwise = () => {
+    if (!selectedScreen) {
+      return
+    }
+
+    const centerX = selectedScreen.x + selectedScreen.width / 2
+    const centerY = selectedScreen.y + selectedScreen.height / 2
+    const nextSize = createWorkspaceScreenRectPatch(selectedScreen.height, selectedScreen.width)
+
+    updateSelectedScreen({
+      ...nextSize,
+      x: centerX - nextSize.width / 2,
+      y: centerY - nextSize.height / 2,
+    })
+  }
+
+  const handleImportFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ''
+
+    if (file) {
+      void onImportLayoutProfile(file)
+    }
+  }
+
   return (
     <div className="workspace-three-board" data-smoke="workspace-rotatable-board">
       <div ref={canvasHostRef} className="workspace-three-canvas-host" />
@@ -853,6 +1230,11 @@ export function WorkspaceThreeBoard({
           </span>
         ))}
       </div>
+      {selectedScreen && selectedScreenSpacePosition ? (
+        <span className="workspace-three-smoke-probe" data-smoke="workspace-selected-space-probe">
+          {`x:${selectedScreenSpacePosition.x};y:${selectedScreenSpacePosition.y};z:${selectedScreenSpacePosition.z};w:${selectedScreen.width};h:${selectedScreen.height};yaw:${selectedScreen.yawDeg};pitch:${selectedScreen.pitchDeg}`}
+        </span>
+      ) : null}
       <div className="workspace-three-board-actions" aria-label="屏幕操作">
         <button
           className="workspace-three-action-button"
@@ -906,19 +1288,156 @@ export function WorkspaceThreeBoard({
           删除屏幕
         </button>
       </div>
+      <div className="workspace-three-layout-panel" data-smoke="workspace-layout-profile-panel">
+        <div className="workspace-three-layout-panel-header">
+          <strong>布局档案</strong>
+        </div>
+        <div className="workspace-three-layout-actions">
+          <button
+            className="workspace-three-layout-save"
+            data-smoke="workspace-layout-profile-save"
+            onClick={onCreateLayoutProfile}
+            type="button"
+          >
+            {layoutProfileCreateLabel}
+          </button>
+          <button
+            className="workspace-three-layout-update"
+            data-smoke="workspace-layout-profile-update"
+            disabled={!canUpdateLayoutProfile || !isLayoutProfileDirty}
+            onClick={onUpdateLayoutProfile}
+            title={
+              !canUpdateLayoutProfile
+                ? '先加载一个已保存布局'
+                : isLayoutProfileDirty
+                  ? '用当前画布内容覆盖活动布局'
+                  : '当前布局已经是最新状态'
+            }
+            type="button"
+          >
+            {layoutProfileUpdateLabel}
+          </button>
+            <div className="workspace-three-layout-file-actions">
+              <button
+                className="workspace-three-layout-file-button"
+                data-smoke="workspace-layout-profile-import"
+                onClick={() => importInputRef.current?.click()}
+                type="button"
+              >
+                导入布局
+              </button>
+            </div>
+          <input
+            ref={importInputRef}
+            accept=".json,application/json"
+            className="workspace-three-layout-file-input"
+            data-smoke="workspace-layout-profile-file-input"
+            onChange={handleImportFileChange}
+            type="file"
+          />
+        </div>
+        <div className="workspace-three-layout-list">
+          {layoutProfiles.length > 0 ? (
+            layoutProfiles.map((profile) => {
+              const isActive = profile.id === activeLayoutProfileId
+              const isPreviewing = profile.id === hoveredLayoutProfileId
+              const isPreset = profile.source === 'preset'
+
+              return (
+                <div
+                  key={profile.id}
+                  className={`workspace-three-layout-item${isActive ? ' is-active' : ''}${
+                    isPreviewing ? ' is-previewing' : ''
+                  }${isPreset ? ' is-preset' : ''
+                  }`}
+                  onMouseEnter={() => setHoveredLayoutProfileId(profile.id)}
+                  onMouseLeave={() =>
+                    setHoveredLayoutProfileId((current) => (current === profile.id ? null : current))
+                  }
+                >
+                  <button
+                    className="workspace-three-layout-item-main"
+                    data-smoke="workspace-layout-profile-item"
+                    data-profile-source={isPreset ? 'preset' : 'user'}
+                    onClick={() => onApplyLayoutProfile(profile.id)}
+                    type="button"
+                  >
+                    <strong>{profile.name}</strong>
+                    <small>{formatWorkspaceLayoutProfileSummary(profile)}</small>
+                  </button>
+                    <div className="workspace-three-layout-item-meta">
+                      <span className="workspace-three-layout-item-time">
+                        {new Intl.DateTimeFormat('zh-CN', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        }).format(profile.updatedAt)}
+                      </span>
+                      <div className="workspace-three-layout-item-actions">
+                        {isPreset ? (
+                          <span
+                            className="workspace-three-layout-item-preset"
+                            data-smoke="workspace-layout-profile-preset"
+                          >
+                            预置
+                          </span>
+                        ) : null}
+                        <button
+                          aria-label={`导出${profile.name}`}
+                          className="workspace-three-layout-item-export"
+                          data-smoke={isPreset ? undefined : 'workspace-layout-profile-export'}
+                          disabled={isPreset}
+                          hidden={isPreset}
+                          onClick={() => onExportLayoutProfile(profile.id)}
+                          type="button"
+                        >
+                          导出
+                        </button>
+                        <button
+                          aria-label={`删除${profile.name}`}
+                          className="workspace-three-layout-item-delete"
+                          disabled={isPreset}
+                          hidden={isPreset}
+                          onClick={() => onDeleteLayoutProfile(profile.id)}
+                          type="button"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </div>
+                </div>
+              )
+            })
+          ) : (
+            <div className="workspace-three-layout-empty">
+              <strong>还没有保存的布局</strong>
+              <small>先摆好屏幕位置，再保存当前布局。</small>
+            </div>
+          )}
+        </div>
+      </div>
       {selectedScreen && (
         <div
           className={`workspace-three-selection-card ${selectedScreenState?.className ?? ''}`}
           data-smoke="workspace-screen-calibration-status"
         >
           <div className="workspace-three-selection-header">
-            <strong>{selectedScreen.name}</strong>
+            <div className="workspace-three-selection-header-main">
+              <strong>{selectedScreen.name}</strong>
             <span
               className={`workspace-three-selection-badge ${
                 selectedScreen.kind === 'camera' ? 'is-camera' : 'is-work'
               }`}
             >
               {selectedScreen.kind === 'camera' ? '摄像头屏' : '工作屏'}
+            </span>
+            </div>
+            <span
+              className={`workspace-three-selection-status-pill ${currentWorkspaceStatusTone}`}
+              data-smoke="workspace-current-screen-status"
+            >
+              当前工作屏：{currentWorkspaceStatusLabel}
             </span>
           </div>
           <div className="workspace-three-selection-groups">
@@ -927,34 +1446,43 @@ export function WorkspaceThreeBoard({
               <div className="workspace-three-editor-fields workspace-three-editor-fields-triplet workspace-three-editor-fields-space">
                 <label className="workspace-three-editor-field">
                   <small>X</small>
-                  <input
-                    aria-label="屏幕 X"
-                    onChange={(event) => handleMetricInput('x')(event.target.value)}
-                    step="1"
-                    type="number"
-                    value={Math.round(selectedScreen.x)}
-                  />
-                </label>
-                <label className="workspace-three-editor-field">
-                  <small>Y</small>
-                  <input
-                    aria-label="屏幕 Y"
-                    onChange={(event) => handleMetricInput('y')(event.target.value)}
-                    step="1"
-                    type="number"
-                    value={Math.round(selectedScreen.y)}
-                  />
-                </label>
-                <label className="workspace-three-editor-field">
-                  <small>Z</small>
-                  <input
-                    aria-label="屏幕 Z"
-                    onChange={(event) => handleMetricInput('depth')(event.target.value)}
-                    step="5"
-                    type="number"
-                    value={selectedScreen.depth}
-                  />
-                </label>
+                    <input
+                      aria-label="屏幕 X"
+                      data-smoke="workspace-space-x-input"
+                      onBlur={() => commitNumericInput('x', commitMetricInput('x'))}
+                      onChange={handleNumericChange('x', commitMetricInput('x'))}
+                      onKeyDown={handleNumericKeyDown('x')}
+                      step="1"
+                      type="number"
+                      value={getNumericInputValue('x', selectedScreenSpacePosition?.x ?? 0)}
+                    />
+                  </label>
+                  <label className="workspace-three-editor-field">
+                    <small>Y</small>
+                    <input
+                      aria-label="屏幕 Y"
+                      data-smoke="workspace-space-y-input"
+                      onBlur={() => commitNumericInput('y', commitMetricInput('y'))}
+                      onChange={handleNumericChange('y', commitMetricInput('y'))}
+                      onKeyDown={handleNumericKeyDown('y')}
+                      step="1"
+                      type="number"
+                      value={getNumericInputValue('y', selectedScreenSpacePosition?.y ?? 0)}
+                    />
+                  </label>
+                  <label className="workspace-three-editor-field">
+                    <small>Z</small>
+                    <input
+                      aria-label="屏幕 Z"
+                      data-smoke="workspace-space-z-input"
+                      onBlur={() => commitNumericInput('depth', commitMetricInput('depth'))}
+                      onChange={handleNumericChange('depth', commitMetricInput('depth'))}
+                      onKeyDown={handleNumericKeyDown('depth')}
+                      step="5"
+                      type="number"
+                      value={getNumericInputValue('depth', selectedScreenSpacePosition?.z ?? 0)}
+                    />
+                  </label>
               </div>
             </section>
             <section className="workspace-three-editor-group">
@@ -962,24 +1490,28 @@ export function WorkspaceThreeBoard({
               <div className="workspace-three-editor-fields">
                 <label className="workspace-three-editor-field">
                   <small>左右夹角</small>
-                  <input
-                    aria-label="屏幕左右夹角"
-                    onChange={(event) => handleMetricInput('yawDeg')(event.target.value)}
-                    step="1"
-                    type="number"
-                    value={selectedScreen.yawDeg}
-                  />
-                </label>
+                    <input
+                      aria-label="屏幕左右夹角"
+                      onBlur={() => commitNumericInput('yawDeg', commitMetricInput('yawDeg'))}
+                      onChange={handleNumericChange('yawDeg', commitMetricInput('yawDeg'))}
+                      onKeyDown={handleNumericKeyDown('yawDeg')}
+                      step="1"
+                      type="number"
+                      value={getNumericInputValue('yawDeg', selectedScreen.yawDeg)}
+                    />
+                  </label>
                 <label className="workspace-three-editor-field">
                   <small>上下倾角</small>
-                  <input
-                    aria-label="屏幕上下倾角"
-                    onChange={(event) => handleMetricInput('pitchDeg')(event.target.value)}
-                    step="1"
-                    type="number"
-                    value={selectedScreen.pitchDeg}
-                  />
-                </label>
+                    <input
+                      aria-label="屏幕上下倾角"
+                      onBlur={() => commitNumericInput('pitchDeg', commitMetricInput('pitchDeg'))}
+                      onChange={handleNumericChange('pitchDeg', commitMetricInput('pitchDeg'))}
+                      onKeyDown={handleNumericKeyDown('pitchDeg')}
+                      step="1"
+                      type="number"
+                      value={getNumericInputValue('pitchDeg', selectedScreen.pitchDeg)}
+                    />
+                  </label>
               </div>
             </section>
             <section className="workspace-three-editor-group">
@@ -992,10 +1524,17 @@ export function WorkspaceThreeBoard({
                     data-smoke="workspace-screen-inch-input"
                     max={workspaceScreenInchLimits.max}
                     min={workspaceScreenInchLimits.min}
-                    onChange={(event) => handleSizeInput('diagonalInches')(event.target.value)}
+                    onBlur={() =>
+                      commitNumericInput('diagonalInches', commitSizeInput('diagonalInches'))
+                    }
+                    onChange={handleNumericChange(
+                      'diagonalInches',
+                      commitSizeInput('diagonalInches'),
+                    )}
+                    onKeyDown={handleNumericKeyDown('diagonalInches')}
                     step="0.5"
                     type="number"
-                    value={selectedScreen.diagonalInches}
+                    value={getNumericInputValue('diagonalInches', selectedScreen.diagonalInches)}
                   />
                 </label>
                 <label className="workspace-three-editor-field">
@@ -1005,10 +1544,12 @@ export function WorkspaceThreeBoard({
                     data-smoke="workspace-screen-width-input"
                     max={workspaceScreenLimits.maxWidth}
                     min={workspaceScreenLimits.minWidth}
-                    onChange={(event) => handleSizeInput('width')(event.target.value)}
+                    onBlur={() => commitNumericInput('width', commitSizeInput('width'))}
+                    onChange={handleNumericChange('width', commitSizeInput('width'))}
+                    onKeyDown={handleNumericKeyDown('width')}
                     step="1"
                     type="number"
-                    value={selectedScreen.width}
+                    value={getNumericInputValue('width', selectedScreen.width)}
                   />
                 </label>
                 <label className="workspace-three-editor-field">
@@ -1018,10 +1559,12 @@ export function WorkspaceThreeBoard({
                     data-smoke="workspace-screen-height-input"
                     max={workspaceScreenLimits.maxHeight}
                     min={workspaceScreenLimits.minHeight}
-                    onChange={(event) => handleSizeInput('height')(event.target.value)}
+                    onBlur={() => commitNumericInput('height', commitSizeInput('height'))}
+                    onChange={handleNumericChange('height', commitSizeInput('height'))}
+                    onKeyDown={handleNumericKeyDown('height')}
                     step="1"
                     type="number"
-                    value={selectedScreen.height}
+                    value={getNumericInputValue('height', selectedScreen.height)}
                   />
                 </label>
               </div>
@@ -1108,6 +1651,16 @@ export function WorkspaceThreeBoard({
           type="button"
         >
           尺寸
+        </button>
+        <button
+          className="workspace-board-rotate-button"
+          data-smoke="workspace-rotate-clockwise"
+          disabled={!selectedScreen}
+          onClick={rotateSelectedScreenClockwise}
+          title="将当前屏幕顺时针旋转 90°，并保持中心位置不变"
+          type="button"
+        >
+          旋转90°
         </button>
       </div>
       <div className="workspace-view-readout">

@@ -1,0 +1,52 @@
+{
+  "generatedAt": 1778146082169,
+  "profiles": [
+    {
+      "name": "三屏幕布局1",
+      "updatedAt": 1778126641685,
+      "url": "/preset-workspace-layouts/preset-01.json"
+    },
+    {
+      "name": "三屏幕布局2",
+      "updatedAt": 1778134395414,
+      "url": "/preset-workspace-layouts/preset-02.json"
+    },
+    {
+      "name": "双屏幕布局1",
+      "updatedAt": 1778134519475,
+      "url": "/preset-workspace-layouts/preset-03.json"
+    },
+    {
+      "name": "双屏幕布局2",
+      "updatedAt": 1778134676959,
+      "url": "/preset-workspace-layouts/preset-04.json"
+    },
+    {
+      "name": "双屏幕布局3",
+      "updatedAt": 1778134718788,
+      "url": "/preset-workspace-layouts/preset-05.json"
+    },
+    {
+      "name": "双屏幕布局4",
+      "updatedAt": 1778135063955,
+      "url": "/preset-workspace-layouts/preset-06.json"
+    },
+    {
+      "name": "双屏幕布局5",
+      "updatedAt": 1778135107871,
+      "url": "/preset-workspace-layouts/preset-07.json"
+    },
+    {
+      "name": "四屏幕布局1",
+      "updatedAt": 1778131047095,
+      "url": "/preset-workspace-layouts/preset-08.json"
+    },
+    {
+      "name": "四屏幕布局2",
+      "updatedAt": 1778131314520,
+      "url": "/preset-workspace-layouts/preset-09.json"
+    }
+  ],
+  "sourceDir": "C:\\Users\\xiaomijxe\\Documents\\预置屏幕布局",
+  "version": 1
+}

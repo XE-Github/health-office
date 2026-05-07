@@ -39,12 +39,31 @@ import {
   type WorkspaceLayoutConfig,
 } from './lib/workspaceConfig'
 import {
+  activateWorkspaceLayoutProfile,
+  createWorkspaceLayoutProfileExportFile,
+  createWorkspaceLayoutProfile,
+  createEmptyWorkspaceLayoutProfileStore,
+  deleteWorkspaceLayoutProfile,
+  getWorkspaceLayoutProfileFilename,
+  getActiveWorkspaceLayoutProfile,
+  importWorkspaceLayoutProfile,
+  isWorkspaceLayoutProfileDirty,
+  normalizeWorkspaceLayoutProfileStore,
+  updateWorkspaceLayoutProfile,
+  workspaceLayoutProfileStorageKey,
+  type WorkspaceLayoutProfile,
+  type WorkspaceLayoutProfileStore,
+} from './lib/workspaceLayoutProfiles'
+import { loadPresetWorkspaceLayoutProfiles } from './lib/presetWorkspaceLayoutProfiles'
+import {
   createEmptyWorkspaceCalibrationStore,
   formatWorkspaceScreenMatchLabel,
   getWorkspaceScreenTarget,
   inferActiveWorkspaceScreen,
   normalizeWorkspaceCalibrationStore,
   pruneWorkspaceCalibrationStore,
+  resetAllWorkspaceCalibrations,
+  resetWorkspaceScreenCalibration,
   upsertWorkspaceScreenCalibration,
   type WorkspaceCalibrationStore,
 } from './lib/workspaceCalibration'
@@ -128,6 +147,109 @@ async function copyTextToClipboard(text: string) {
   textArea.remove()
 }
 
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options?: {
+    suggestedName?: string
+    types?: Array<{
+      accept: Record<string, string[]>
+      description: string
+    }>
+  }) => Promise<{
+    createWritable: () => Promise<{
+      close: () => Promise<void> | void
+      truncate?: (size: number) => Promise<void> | void
+      write: (
+        data:
+          | Blob
+          | BufferSource
+          | string
+          | {
+              data: Blob | BufferSource | string
+              position?: number
+              type: 'write'
+            },
+      ) => Promise<void> | void
+    }>
+    getFile?: () => Promise<File>
+  }>
+}
+
+function triggerTextFileDownload(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  anchor.style.display = 'none'
+  document.body.append(anchor)
+  anchor.dispatchEvent(
+    new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+    }),
+  )
+
+  window.setTimeout(() => {
+    anchor.remove()
+    window.URL.revokeObjectURL(url)
+  }, 60_000)
+}
+
+async function saveTextFile(filename: string, content: string, type = 'application/json') {
+  const encodedContent = new TextEncoder().encode(content)
+  const pickerWindow = window as SaveFilePickerWindow
+
+  if (!content.trim() || encodedContent.byteLength === 0) {
+    throw new Error('Export content is empty.')
+  }
+
+  if (pickerWindow.showSaveFilePicker) {
+    try {
+      const fileHandle = await pickerWindow.showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            accept: {
+              [type]: ['.json'],
+            },
+            description: 'JSON layout file',
+          },
+          ],
+        })
+      const writable = await fileHandle.createWritable()
+      await writable.truncate?.(0)
+      await writable.write({
+        data: encodedContent,
+        position: 0,
+        type: 'write',
+      })
+      await writable.truncate?.(encodedContent.byteLength)
+      await writable.close()
+
+      if (fileHandle.getFile) {
+        const savedFile = await fileHandle.getFile()
+
+        if (savedFile.size === 0) {
+          throw new Error('Saved file is empty after native picker write.')
+        }
+      }
+
+      return
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return
+      }
+
+      console.error('Failed to use save file picker.', error)
+    }
+  }
+
+  triggerTextFileDownload(filename, content, type)
+}
+
 const defaultHudPosition: HudPosition = {
   x: 24,
   y: 24,
@@ -156,6 +278,16 @@ function App() {
       'health-office-demo-workspace-calibrations-v1',
       createEmptyWorkspaceCalibrationStore(),
     )
+  const [workspaceLayoutProfileStore, setWorkspaceLayoutProfileStore] =
+    usePersistentState<WorkspaceLayoutProfileStore>(
+      workspaceLayoutProfileStorageKey,
+      createEmptyWorkspaceLayoutProfileStore(),
+    )
+  const [presetWorkspaceLayoutProfiles, setPresetWorkspaceLayoutProfiles] = useState<
+    WorkspaceLayoutProfile[]
+  >([])
+  const [activePresetWorkspaceLayoutProfileId, setActivePresetWorkspaceLayoutProfileId] =
+    useState<string | null>(null)
   const [workspaceCalibrationTargetId, setWorkspaceCalibrationTargetId] = useState<string | null>(null)
   const [activeWorkspaceScreenId, setActiveWorkspaceScreenId] = useState<string | null>(null)
   const [cameraFullscreen, setCameraFullscreen] = useState(false)
@@ -202,6 +334,58 @@ function App() {
       ),
     [workspaceCalibrationStore, normalizedWorkspaceLayout],
   )
+  const normalizedWorkspaceLayoutProfileStore = useMemo(
+    () => normalizeWorkspaceLayoutProfileStore(workspaceLayoutProfileStore),
+    [workspaceLayoutProfileStore],
+  )
+  const allWorkspaceLayoutProfiles = useMemo(
+    () => [
+      ...presetWorkspaceLayoutProfiles,
+      ...normalizedWorkspaceLayoutProfileStore.profiles,
+    ],
+    [normalizedWorkspaceLayoutProfileStore.profiles, presetWorkspaceLayoutProfiles],
+  )
+  const activeWorkspaceLayoutProfile = useMemo(
+    () =>
+      activePresetWorkspaceLayoutProfileId
+        ? allWorkspaceLayoutProfiles.find(
+            (profile) => profile.id === activePresetWorkspaceLayoutProfileId,
+          ) ?? null
+        : getActiveWorkspaceLayoutProfile(normalizedWorkspaceLayoutProfileStore),
+    [
+      activePresetWorkspaceLayoutProfileId,
+      allWorkspaceLayoutProfiles,
+      normalizedWorkspaceLayoutProfileStore,
+    ],
+  )
+  const workspaceLayoutProfileDirty = useMemo(
+    () =>
+      isWorkspaceLayoutProfileDirty(
+        activeWorkspaceLayoutProfile,
+        normalizedWorkspaceLayout,
+        normalizedWorkspaceCalibrationStore,
+      ),
+    [
+      activeWorkspaceLayoutProfile,
+      normalizedWorkspaceCalibrationStore,
+      normalizedWorkspaceLayout,
+    ],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+
+    void loadPresetWorkspaceLayoutProfiles().then((profiles) => {
+      if (!cancelled) {
+        setPresetWorkspaceLayoutProfiles(profiles)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const cameraWorkspaceScreenId = useMemo(
     () =>
       normalizedWorkspaceLayout.screens.find((screen) => screen.kind === 'camera')?.id ??
@@ -972,6 +1156,173 @@ function App() {
     setWorkspaceCalibrationStore,
   ])
 
+  const handleCreateWorkspaceLayoutProfile = useCallback(() => {
+    setActivePresetWorkspaceLayoutProfileId(null)
+    setWorkspaceLayoutProfileStore((currentStore) =>
+      createWorkspaceLayoutProfile(
+        currentStore,
+        normalizedWorkspaceLayout,
+        normalizedWorkspaceCalibrationStore,
+      ),
+    )
+  }, [
+    normalizedWorkspaceCalibrationStore,
+    normalizedWorkspaceLayout,
+    setWorkspaceLayoutProfileStore,
+  ])
+
+  const handleUpdateWorkspaceLayoutProfile = useCallback(() => {
+    if (!activeWorkspaceLayoutProfile || activeWorkspaceLayoutProfile.source === 'preset') {
+      return
+    }
+
+    setWorkspaceLayoutProfileStore((currentStore) =>
+      updateWorkspaceLayoutProfile(
+        currentStore,
+        activeWorkspaceLayoutProfile.id,
+        normalizedWorkspaceLayout,
+        normalizedWorkspaceCalibrationStore,
+      ),
+    )
+  }, [
+    activeWorkspaceLayoutProfile,
+    normalizedWorkspaceCalibrationStore,
+    normalizedWorkspaceLayout,
+    setWorkspaceLayoutProfileStore,
+  ])
+
+  const handleExportWorkspaceLayoutProfile = useCallback(async (profileId?: string) => {
+    const profileToExport = profileId
+      ? normalizedWorkspaceLayoutProfileStore.profiles.find((profile) => profile.id === profileId)
+      : null
+
+    if (profileId && !profileToExport) {
+      const presetProfile = allWorkspaceLayoutProfiles.find((profile) => profile.id === profileId)
+
+      window.alert(
+        presetProfile?.source === 'preset'
+          ? '预置布局不可导出，请先另存为新布局。'
+          : '导出失败：没有找到这份布局。',
+      )
+      return
+    }
+
+    const exportName = profileToExport?.name ?? activeWorkspaceLayoutProfile?.name ?? '当前布局'
+    const exportLayout = profileToExport?.layout ?? normalizedWorkspaceLayout
+    const exportCalibrations = profileToExport?.calibrations ?? normalizedWorkspaceCalibrationStore
+    const exportFile = createWorkspaceLayoutProfileExportFile(
+      exportName,
+      exportLayout,
+      exportCalibrations,
+    )
+
+    try {
+      await saveTextFile(
+        getWorkspaceLayoutProfileFilename(exportName),
+        JSON.stringify(exportFile, null, 2),
+      )
+    } catch (error) {
+      console.error('Failed to export workspace layout profile.', error)
+      window.alert('导出失败：布局文件没有成功写入。')
+    }
+  }, [
+    activeWorkspaceLayoutProfile,
+    allWorkspaceLayoutProfiles,
+    normalizedWorkspaceCalibrationStore,
+    normalizedWorkspaceLayoutProfileStore,
+    normalizedWorkspaceLayout,
+  ])
+
+  const handleImportWorkspaceLayoutProfile = useCallback(async (file: File) => {
+    try {
+      const rawFile = JSON.parse(await file.text()) as unknown
+      const result = importWorkspaceLayoutProfile(
+        normalizedWorkspaceLayoutProfileStore,
+        rawFile,
+      )
+
+      if (!result) {
+        window.alert('导入失败：请选择健康办公布局 JSON 文件。')
+        return
+      }
+
+      startTransition(() => {
+        setActivePresetWorkspaceLayoutProfileId(null)
+        setWorkspaceLayoutProfileStore(result.store)
+        setWorkspaceLayout(result.profile.layout)
+        setWorkspaceCalibrationStore(result.profile.calibrations)
+        setWorkspaceCalibrationTargetId(null)
+        setActiveWorkspaceScreenId(result.profile.layout.screens[0]?.id ?? null)
+      })
+    } catch (error) {
+      console.error('Failed to import workspace layout profile.', error)
+      window.alert('导入失败：文件不是有效的 JSON 布局文件。')
+    }
+  }, [
+    normalizedWorkspaceLayoutProfileStore,
+    setWorkspaceCalibrationStore,
+    setWorkspaceLayout,
+    setWorkspaceLayoutProfileStore,
+  ])
+
+  const handleApplyWorkspaceLayoutProfile = useCallback((profileId: string) => {
+    const profile = allWorkspaceLayoutProfiles.find(
+      (item) => item.id === profileId,
+    )
+
+    if (!profile) {
+      return
+    }
+
+    startTransition(() => {
+      setWorkspaceLayout(profile.layout)
+      setWorkspaceCalibrationStore(profile.calibrations)
+      if (profile.source === 'preset') {
+        setActivePresetWorkspaceLayoutProfileId(profile.id)
+      } else {
+        setActivePresetWorkspaceLayoutProfileId(null)
+        setWorkspaceLayoutProfileStore((currentStore) =>
+          activateWorkspaceLayoutProfile(currentStore, profileId),
+        )
+      }
+      setWorkspaceCalibrationTargetId(null)
+      setActiveWorkspaceScreenId(profile.layout.screens[0]?.id ?? null)
+    })
+  }, [
+    allWorkspaceLayoutProfiles,
+    setWorkspaceCalibrationStore,
+    setWorkspaceLayout,
+    setWorkspaceLayoutProfileStore,
+  ])
+
+  const handleDeleteWorkspaceLayoutProfile = useCallback((profileId: string) => {
+    if (allWorkspaceLayoutProfiles.some((profile) => profile.id === profileId && profile.source === 'preset')) {
+      return
+    }
+
+    setWorkspaceLayoutProfileStore((currentStore) =>
+      deleteWorkspaceLayoutProfile(currentStore, profileId),
+    )
+  }, [allWorkspaceLayoutProfiles, setWorkspaceLayoutProfileStore])
+
+  const handleInvalidateWorkspaceCalibration = useCallback(
+    (screenId: string, scope: 'all' | 'screen') => {
+      setWorkspaceCalibrationTargetId((currentTargetId) => {
+        if (scope === 'all' || currentTargetId === screenId) {
+          return null
+        }
+
+        return currentTargetId
+      })
+      setWorkspaceCalibrationStore((currentStore) =>
+        scope === 'all'
+          ? resetAllWorkspaceCalibrations()
+          : resetWorkspaceScreenCalibration(currentStore, screenId),
+      )
+    },
+    [setWorkspaceCalibrationStore],
+  )
+
   const toggleDemoFlag = (key: keyof DemoFlags) => {
     setDemoFlags((current) => ({
       ...current,
@@ -1256,6 +1607,16 @@ function App() {
         : effectiveWorkspaceScreen
           ? `${effectiveWorkspaceScreen.name} · 保持中`
           : formatWorkspaceScreenMatchLabel(workspaceScreenMatch)
+  const workspaceLayoutProfileCreateLabel = activeWorkspaceLayoutProfile
+    ? '另存为新布局'
+    : '保存当前布局'
+  const workspaceLayoutProfileUpdateLabel = activeWorkspaceLayoutProfile
+    ? activeWorkspaceLayoutProfile.source === 'preset'
+      ? '预置布局不可更新'
+      : workspaceLayoutProfileDirty
+      ? '更新当前布局'
+      : '当前布局已最新'
+    : '先选择一个布局'
   const screenModeHudLabel =
     screenMode === 'single'
       ? '单屏模式'
@@ -1790,21 +2151,34 @@ function App() {
       <div className="workspace-config-modal-card">
         <Suspense fallback={<div className="workspace-config-loading">正在加载多屏配置...</div>}>
           <WorkspaceConfigPage
+            activeLayoutProfileId={activeWorkspaceLayoutProfile?.id ?? null}
+            canUpdateLayoutProfile={Boolean(
+              activeWorkspaceLayoutProfile && activeWorkspaceLayoutProfile.source !== 'preset',
+            )}
             calibrations={normalizedWorkspaceCalibrationStore}
             calibrationTargetScreenId={
               distanceCalibration.status === 'sampling' || postureCalibration.status === 'sampling'
                 ? workspaceCalibrationTargetId
                 : null
             }
-            cameraStatus={cameraMeta.label}
-            currentScreenId={effectiveWorkspaceScreenId}
             currentScreenLabel={workspaceActiveScreenLabel}
             distanceCalibrationLabel={distanceCalibrationEntryLabel}
+            isLayoutProfileDirty={workspaceLayoutProfileDirty}
             layout={normalizedWorkspaceLayout}
+            layoutProfileCreateLabel={workspaceLayoutProfileCreateLabel}
+            layoutProfiles={allWorkspaceLayoutProfiles}
+            layoutProfileUpdateLabel={workspaceLayoutProfileUpdateLabel}
+            onApplyLayoutProfile={handleApplyWorkspaceLayoutProfile}
             onBack={() => setWorkspaceConfigOpen(false)}
             onCalibrateScreen={beginUnifiedCalibration}
             onChange={setWorkspaceLayout}
+            onCreateLayoutProfile={handleCreateWorkspaceLayoutProfile}
+            onDeleteLayoutProfile={handleDeleteWorkspaceLayoutProfile}
+            onExportLayoutProfile={handleExportWorkspaceLayoutProfile}
+            onImportLayoutProfile={handleImportWorkspaceLayoutProfile}
+            onInvalidateCalibration={handleInvalidateWorkspaceCalibration}
             postureCalibrationLabel={postureCalibrationEntryLabel}
+            onUpdateLayoutProfile={handleUpdateWorkspaceLayoutProfile}
           />
         </Suspense>
       </div>

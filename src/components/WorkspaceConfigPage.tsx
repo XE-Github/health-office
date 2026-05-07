@@ -1,5 +1,8 @@
 import { lazy, Suspense, useState } from 'react'
 import type { WorkspaceCalibrationStore } from '../lib/workspaceCalibration'
+import type {
+  WorkspaceLayoutProfile,
+} from '../lib/workspaceLayoutProfiles'
 import type { WorkspaceLayoutConfig } from '../lib/workspaceConfig'
 import {
   createWorkspaceScreenConfig,
@@ -20,17 +23,28 @@ const WorkspaceThreeBoard = lazy(() =>
 )
 
 type WorkspaceConfigPageProps = {
+  activeLayoutProfileId: string | null
+  canUpdateLayoutProfile: boolean
   calibrations: WorkspaceCalibrationStore
   calibrationTargetScreenId: string | null
-  cameraStatus: string
-  currentScreenId: string | null
   currentScreenLabel: string
   distanceCalibrationLabel: string
+  isLayoutProfileDirty: boolean
   layout: WorkspaceLayoutConfig
+  layoutProfileCreateLabel: string
+  layoutProfiles: WorkspaceLayoutProfile[]
+  layoutProfileUpdateLabel: string
+  onApplyLayoutProfile: (profileId: string) => void
   onBack: () => void
   onCalibrateScreen: (screenId: string) => void
   onChange: (nextLayout: WorkspaceLayoutConfig) => void
+  onCreateLayoutProfile: () => void
+  onDeleteLayoutProfile: (profileId: string) => void
+  onExportLayoutProfile: (profileId: string) => void
+  onImportLayoutProfile: (file: File) => void
+  onInvalidateCalibration: (screenId: string, scope: 'all' | 'screen') => void
   postureCalibrationLabel: string
+  onUpdateLayoutProfile: () => void
 }
 
 function formatTime(timestamp: number | null | undefined) {
@@ -85,17 +99,28 @@ function getCalibrationState(
 }
 
 export function WorkspaceConfigPage({
+  activeLayoutProfileId,
+  canUpdateLayoutProfile,
   calibrations,
   calibrationTargetScreenId,
-  cameraStatus,
-  currentScreenId,
   currentScreenLabel,
   distanceCalibrationLabel,
+  isLayoutProfileDirty,
   layout,
+  layoutProfileCreateLabel,
+  layoutProfiles,
+  layoutProfileUpdateLabel,
+  onApplyLayoutProfile,
   onBack,
   onCalibrateScreen,
   onChange,
+  onCreateLayoutProfile,
+  onDeleteLayoutProfile,
+  onExportLayoutProfile,
+  onImportLayoutProfile,
+  onInvalidateCalibration,
   postureCalibrationLabel,
+  onUpdateLayoutProfile,
 }: WorkspaceConfigPageProps) {
   const [selectedScreenId, setSelectedScreenId] = useState(layout.screens[0]?.id ?? '')
   const [sceneView, setSceneView] = useState<WorkspaceSceneView>({
@@ -107,8 +132,6 @@ export function WorkspaceConfigPage({
     layout.screens.find((screen) => screen.id === selectedScreenId)?.id ?? layout.screens[0]?.id ?? ''
   const selectedScreen =
     layout.screens.find((screen) => screen.id === effectiveSelectedScreenId) ?? layout.screens[0] ?? null
-  const cameraScreen =
-    layout.screens.find((screen) => screen.kind === 'camera') ?? layout.screens[0] ?? null
   const selectedCalibration =
     selectedScreen ? calibrations.screens[selectedScreen.id] ?? null : null
   const selectedCalibrationState = selectedScreen
@@ -150,15 +173,42 @@ export function WorkspaceConfigPage({
     })
   }
 
+  const invalidatingScreenFields = [
+    'depth',
+    'diagonalInches',
+    'height',
+    'pitchDeg',
+    'width',
+    'x',
+    'y',
+    'yawDeg',
+  ] as const
+
   const updateScreen = (
     screenId: string,
     patch: Partial<WorkspaceLayoutConfig['screens'][number]>,
   ) => {
+    const currentScreen = layout.screens.find((screen) => screen.id === screenId)
+
+    if (!currentScreen) {
+      return
+    }
+
+    const normalizedPatch = normalizeWorkspaceScreenPatch(currentScreen, patch)
+    const nextScreen = { ...currentScreen, ...normalizedPatch }
+    const shouldInvalidateCalibration = invalidatingScreenFields.some(
+      (field) => nextScreen[field] !== currentScreen[field],
+    )
+
     commitScreens(
       layout.screens.map((screen) =>
-        screen.id === screenId ? { ...screen, ...normalizeWorkspaceScreenPatch(screen, patch) } : screen,
+        screen.id === screenId ? nextScreen : screen,
       ),
     )
+
+    if (shouldInvalidateCalibration) {
+      onInvalidateCalibration(screenId, currentScreen.kind === 'camera' ? 'all' : 'screen')
+    }
   }
 
   const handleAddScreen = () => {
@@ -176,6 +226,7 @@ export function WorkspaceConfigPage({
       return
     }
 
+    const deletedScreen = layout.screens.find((screen) => screen.id === screenId)
     const remainingScreens = layout.screens.filter((screen) => screen.id !== screenId)
     const normalizedScreens =
       remainingScreens.some((screen) => screen.kind === 'camera') || remainingScreens.length === 0
@@ -187,10 +238,13 @@ export function WorkspaceConfigPage({
     if (selectedScreenId === screenId) {
       setSelectedScreenId(normalizedScreens[0]?.id ?? '')
     }
+
+    onInvalidateCalibration(screenId, deletedScreen?.kind === 'camera' ? 'all' : 'screen')
   }
 
   const handleSetCameraScreen = (screenId: string) => {
     commitScreens(setCameraWorkspaceScreen(layout.screens, screenId))
+    onInvalidateCalibration(screenId, 'all')
   }
 
   return (
@@ -218,14 +272,27 @@ export function WorkspaceConfigPage({
             }
           >
             <WorkspaceThreeBoard
+              activeLayoutProfileId={activeLayoutProfileId}
               canAddScreen={canAddScreen}
+              canUpdateLayoutProfile={canUpdateLayoutProfile}
+              currentWorkspaceStatusLabel={currentScreenLabel}
+              isLayoutProfileDirty={isLayoutProfileDirty}
               layout={layout}
+              layoutProfileCreateLabel={layoutProfileCreateLabel}
+              layoutProfiles={layoutProfiles}
+              layoutProfileUpdateLabel={layoutProfileUpdateLabel}
               onAddScreen={handleAddScreen}
+              onApplyLayoutProfile={onApplyLayoutProfile}
               onCalibrateScreen={onCalibrateScreen}
+              onCreateLayoutProfile={onCreateLayoutProfile}
+              onDeleteLayoutProfile={onDeleteLayoutProfile}
+              onExportLayoutProfile={onExportLayoutProfile}
+              onImportLayoutProfile={onImportLayoutProfile}
               onDeleteScreen={handleDeleteScreen}
               onResetView={() => setSceneView({ pitch: 0, yaw: 0 })}
               onSelectScreen={setSelectedScreenId}
               onSetCameraScreen={handleSetCameraScreen}
+              onUpdateLayoutProfile={onUpdateLayoutProfile}
               onUpdateScreen={updateScreen}
               onViewChange={setSceneView}
               screenStates={screenStates}
@@ -237,62 +304,6 @@ export function WorkspaceConfigPage({
             />
           </Suspense>
         </section>
-
-        {selectedScreen && selectedCalibrationState && (
-          <aside className="workspace-config-inspector">
-            <section className="workspace-config-panel workspace-config-panel-compact">
-              <div className="workspace-config-panel-header">
-                <strong>当前屏幕</strong>
-              </div>
-              <div className="workspace-config-summary workspace-config-summary-compact">
-                <div className="workspace-summary-row">
-                  <span>摄像头</span>
-                  <strong>{cameraStatus}</strong>
-                </div>
-                {cameraScreen && (
-                  <div className="workspace-summary-row">
-                    <span>摄像头屏</span>
-                    <strong>{cameraScreen.name}</strong>
-                  </div>
-                )}
-                <div className="workspace-summary-row">
-                  <span>工作屏</span>
-                  <strong>{currentScreenLabel}</strong>
-                </div>
-              </div>
-              <div className="workspace-screen-list workspace-screen-list-compact">
-                {layout.screens.map((screen) => {
-                  const calibrationState = getCalibrationState(
-                    screen.id,
-                    calibrations,
-                    calibrationTargetScreenId,
-                  )
-
-                  return (
-                    <button
-                      key={screen.id}
-                      className={`workspace-screen-item ${
-                        effectiveSelectedScreenId === screen.id ? 'is-selected' : ''
-                      }`}
-                      onClick={() => setSelectedScreenId(screen.id)}
-                      type="button"
-                    >
-                      <strong>{screen.name}</strong>
-                      <span className="workspace-screen-item-badges">
-                        {currentScreenId === screen.id && (
-                          <span className="workspace-calibration-badge is-current">当前</span>
-                        )}
-                        <span className={`workspace-calibration-badge ${calibrationState.className}`}>
-                          {calibrationState.label}
-                        </span>
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-          </aside>
-        )}
       </div>
     </div>
   )

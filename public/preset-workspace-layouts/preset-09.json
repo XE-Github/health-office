@@ -1,0 +1,74 @@
+{
+  "app": "health-office",
+  "exportedAt": 1778131306873,
+  "kind": "workspace-layout-profile",
+  "profile": {
+    "calibrations": {
+      "screens": {},
+      "version": 1
+    },
+    "layout": {
+      "screens": [
+        {
+          "depth": 0,
+          "diagonalInches": 27,
+          "height": 254,
+          "id": "camera-screen",
+          "kind": "work",
+          "name": "工作屏 1",
+          "note": "默认识别以这块屏为传感器参考系。",
+          "pitchDeg": 0,
+          "width": 143,
+          "x": 299,
+          "y": 308,
+          "yawDeg": 10
+        },
+        {
+          "depth": -20,
+          "diagonalInches": 16.3,
+          "height": 90,
+          "id": "screen-mo6jt2w1-syisa2",
+          "kind": "camera",
+          "name": "摄像头所在屏",
+          "note": "",
+          "pitchDeg": 10,
+          "width": 151,
+          "x": 514.5,
+          "y": 464,
+          "yawDeg": 0
+        },
+        {
+          "depth": 0,
+          "diagonalInches": 27,
+          "height": 143,
+          "id": "screen-mo6juie5-a58xnb",
+          "kind": "work",
+          "name": "工作屏 2",
+          "note": "",
+          "pitchDeg": 0,
+          "width": 254,
+          "x": 463,
+          "y": 309,
+          "yawDeg": 0
+        },
+        {
+          "depth": 0,
+          "diagonalInches": 27,
+          "height": 254,
+          "id": "screen-moje8e2h-fu1ylk",
+          "kind": "work",
+          "name": "工作屏 3",
+          "note": "",
+          "pitchDeg": 0,
+          "width": 143,
+          "x": 737.5,
+          "y": 308,
+          "yawDeg": -10
+        }
+      ],
+      "version": 1
+    },
+    "name": "布局 4"
+  },
+  "version": 1
+}

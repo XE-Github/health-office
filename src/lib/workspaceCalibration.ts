@@ -241,6 +241,23 @@ export function upsertWorkspaceScreenCalibration(
   }
 }
 
+export function resetWorkspaceScreenCalibration(
+  store: WorkspaceCalibrationStore,
+  screenId: string,
+): WorkspaceCalibrationStore {
+  const remainingScreens = { ...store.screens }
+  delete remainingScreens[screenId]
+
+  return {
+    screens: remainingScreens,
+    version: 1,
+  }
+}
+
+export function resetAllWorkspaceCalibrations(): WorkspaceCalibrationStore {
+  return createEmptyWorkspaceCalibrationStore()
+}
+
 export function pruneWorkspaceCalibrationStore(
   store: WorkspaceCalibrationStore,
   layout: WorkspaceLayoutConfig,

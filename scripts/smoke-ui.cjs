@@ -46,12 +46,52 @@ async function hoverBySelector(page, selector) {
   await page.hover(selector)
 }
 
+async function replaceInputValue(page, selector, value) {
+  await page.waitForSelector(selector, { timeout: 20_000 })
+  await page.click(selector, { clickCount: 3 })
+  await page.keyboard.press('Backspace')
+  await page.keyboard.type(value)
+  await page.keyboard.press('Enter')
+}
+
+async function typeInputValueWithoutCommit(page, selector, value) {
+  await page.waitForSelector(selector, { timeout: 20_000 })
+  await page.click(selector, { clickCount: 3 })
+  await page.keyboard.press('Backspace')
+  await page.keyboard.type(value)
+}
+
 async function assertSelectorTextIncludes(page, selector, expected, label, timeout = 20_000) {
   await page.waitForFunction(
     (needleSelector, needleText) => {
       const element = document.querySelector(needleSelector)
       return Boolean(element && element.textContent && element.textContent.includes(needleText))
     },
+    { timeout },
+    selector,
+    expected,
+  )
+
+  return `PASS ${label}`
+}
+
+async function assertInputValue(page, selector, expected, label, timeout = 20_000) {
+  await page.waitForFunction(
+    (needleSelector, needleValue) => {
+      const element = document.querySelector(needleSelector)
+      return Boolean(element instanceof HTMLInputElement && element.value === needleValue)
+    },
+    { timeout },
+    selector,
+    expected,
+  )
+
+  return `PASS ${label}`
+}
+
+async function assertSelectorCount(page, selector, expected, label, timeout = 20_000) {
+  await page.waitForFunction(
+    (needleSelector, needleCount) => document.querySelectorAll(needleSelector).length === needleCount,
     { timeout },
     selector,
     expected,
@@ -84,9 +124,9 @@ function clearPreviousArtifacts() {
   fs.mkdirSync(artifactDir, { recursive: true })
 
   for (const filename of fs.readdirSync(artifactDir)) {
-    if (/^smoke-(home|failure)\.png$/.test(filename)) {
+    if (/^smoke-(home|failure)\.png$/.test(filename) || filename === 'smoke-downloads') {
       try {
-        fs.rmSync(path.join(artifactDir, filename), { force: true })
+        fs.rmSync(path.join(artifactDir, filename), { force: true, recursive: true })
       } catch (error) {
         if (error && error.code !== 'ENOENT') {
           console.warn(`WARN Could not remove stale artifact ${filename}: ${error.code || error.message}`)
@@ -94,6 +134,67 @@ function clearPreviousArtifacts() {
       }
     }
   }
+}
+
+async function waitForDownloadedLayoutJson(downloadDir, label, timeout = 20_000) {
+  const startedAt = Date.now()
+
+  while (Date.now() - startedAt < timeout) {
+    const filenames = fs.existsSync(downloadDir) ? fs.readdirSync(downloadDir) : []
+    const jsonFile = filenames.find(
+      (filename) => filename.endsWith('.json') && !filename.endsWith('.crdownload'),
+    )
+
+    if (jsonFile) {
+      const filePath = path.join(downloadDir, jsonFile)
+      const content = fs.readFileSync(filePath, 'utf8')
+      const parsed = JSON.parse(content)
+
+      if (
+        content.length > 80 &&
+        parsed &&
+        parsed.kind === 'workspace-layout-profile' &&
+        Array.isArray(parsed.profile?.layout?.screens) &&
+        parsed.profile.layout.screens.length > 0
+      ) {
+        return `PASS ${label}`
+      }
+
+      throw new Error(`Downloaded layout JSON is empty or invalid: ${filePath}`)
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+
+  throw new Error(`No layout JSON was downloaded within ${timeout}ms.`)
+}
+
+async function waitForNativeSavedLayoutJson(page, label, timeout = 20_000) {
+  await page.waitForFunction(
+    () => {
+      const savedFile = window.__smokeNativeLayoutSave
+
+      if (!savedFile || !savedFile.text || savedFile.size <= 80 || !savedFile.closed) {
+        return false
+      }
+
+      try {
+        const parsed = JSON.parse(savedFile.text)
+
+        return Boolean(
+          parsed &&
+            parsed.kind === 'workspace-layout-profile' &&
+            Array.isArray(parsed.profile?.layout?.screens) &&
+            parsed.profile.layout.screens.length > 0,
+        )
+      } catch {
+        return false
+      }
+    },
+    { timeout },
+  )
+
+  return `PASS ${label}`
 }
 
 function assertLocalFaceLandmarkerAssets() {
@@ -186,6 +287,13 @@ async function run() {
   const page = await browser.newPage()
   const passes = []
   const consoleFailures = []
+  const downloadDir = path.join(artifactDir, 'smoke-downloads')
+  fs.mkdirSync(downloadDir, { recursive: true })
+  const cdpSession = await page.target().createCDPSession()
+  await cdpSession.send('Page.setDownloadBehavior', {
+    behavior: 'allow',
+    downloadPath: downloadDir,
+  })
 
   page.on('console', (message) => {
     const text = message.text()
@@ -232,6 +340,15 @@ async function run() {
     passes.push(await waitForSelector(page, '[data-smoke="workspace-space-box"]', 'workspace config exposes spatial box'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-rotatable-board"]', 'workspace config exposes rotatable 3D board'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-three-canvas"]', 'workspace config lazy-loads Three.js canvas'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-panel"]', 'workspace config exposes layout profile panel'))
+    passes.push(await waitForSelector(page, '[data-profile-source="preset"]', 'workspace config exposes preset layout profiles'))
+    passes.push(await assertSelectorTextIncludes(page, '[data-smoke="workspace-layout-profile-panel"]', '双屏幕布局1', 'workspace config shows preset layout filename'))
+    passes.push(await assertSelectorCount(page, '[data-smoke="workspace-layout-profile-preset"]', 9, 'workspace config shows all preset layout profiles as read-only'))
+    passes.push(await assertSelectorCount(page, '[data-smoke="workspace-layout-profile-export"]', 0, 'workspace config hides export action for preset layouts'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-save"]', 'workspace config exposes layout profile save action'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-update"]', 'workspace config exposes layout profile update action'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-import"]', 'workspace config exposes layout import action'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-file-input"]', 'workspace config exposes hidden layout file input'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-add-screen-inline"]', 'workspace config exposes inline add-screen action'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-screen-calibrate-inline"]', 'workspace config exposes inline calibration action'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-delete-screen-inline"]', 'workspace config exposes inline delete action'))
@@ -242,7 +359,111 @@ async function run() {
     passes.push(await waitForSelector(page, '[data-smoke="workspace-yaw-handle"]', 'workspace config exposes 3D yaw drag handle'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-pitch-handle"]', 'workspace config exposes 3D pitch drag handle'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-resize-handle"]', 'workspace config exposes screen resize handle'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-rotate-clockwise"]', 'workspace config exposes 90-degree rotate action'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-screen-calibration-status"]', 'workspace config makes screen calibration status visible'))
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-space-x-input"]', '0', 'workspace config uses box-center X origin'))
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-space-y-input"]', '0', 'workspace config uses box-center Y origin'))
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-space-z-input"]', '0', 'workspace config uses box-center Z origin'))
+    await typeInputValueWithoutCommit(page, '[data-smoke="workspace-space-x-input"]', '210')
+    passes.push(
+      await assertSelectorTextIncludes(
+        page,
+        '[data-smoke="workspace-selected-space-probe"]',
+        'x:210',
+        'workspace config commits X input to board state while typing',
+      ),
+    )
+    await page.keyboard.press('Enter')
+    await typeInputValueWithoutCommit(page, '[data-smoke="workspace-space-z-input"]', '35')
+    passes.push(
+      await assertSelectorTextIncludes(
+        page,
+        '[data-smoke="workspace-selected-space-probe"]',
+        'z:35',
+        'workspace config commits Z input to board state while typing',
+      ),
+    )
+    await page.keyboard.press('Enter')
+    await replaceInputValue(page, '[data-smoke="workspace-space-z-input"]', '0')
+    await replaceInputValue(page, '[data-smoke="workspace-screen-width-input"]', '151')
+    await replaceInputValue(page, '[data-smoke="workspace-space-x-input"]', '0')
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-space-x-input"]', '0', 'workspace config keeps zero X when selected screen width is odd'))
+    await replaceInputValue(page, '[data-smoke="workspace-space-y-input"]', '-10')
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-space-y-input"]', '-10', 'workspace config accepts negative center-space Y input'))
+    await replaceInputValue(page, '[data-smoke="workspace-screen-height-input"]', '120')
+    await clickBySelector(page, '[data-smoke="workspace-rotate-clockwise"]')
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-screen-width-input"]', '120', 'workspace config rotates selected screen width clockwise'))
+    passes.push(await assertInputValue(page, '[data-smoke="workspace-screen-height-input"]', '151', 'workspace config rotates selected screen height clockwise'))
+    await clickBySelector(page, '[data-smoke="workspace-layout-profile-save"]')
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-item"]', 'workspace config can save a layout profile'))
+    passes.push(await waitForSelector(page, '[data-smoke="workspace-layout-profile-export"]', 'workspace config exposes layout export action inside saved profile card'))
+    await page.evaluate(() => {
+      window.__smokeNativeLayoutSave = {
+        closed: false,
+        size: 0,
+        text: '',
+      }
+
+      Object.defineProperty(window, 'showSaveFilePicker', {
+        configurable: true,
+        value: async () => {
+          let content = ''
+
+          return {
+            createWritable: async () => ({
+              close: async () => {
+                window.__smokeNativeLayoutSave = {
+                  closed: true,
+                  size: new TextEncoder().encode(content).byteLength,
+                  text: content,
+                }
+              },
+              truncate: async (size) => {
+                if (size === 0) {
+                  content = ''
+                }
+              },
+              write: async (input) => {
+                const payload =
+                  input && typeof input === 'object' && input.type === 'write'
+                    ? input.data
+                    : input
+
+                if (typeof payload === 'string') {
+                  content = payload
+                  return
+                }
+
+                if (payload instanceof Blob) {
+                  content = await payload.text()
+                  return
+                }
+
+                content = new TextDecoder().decode(payload)
+              },
+            }),
+            getFile: async () =>
+              new File([content], 'layout.json', {
+                type: 'application/json',
+              }),
+          }
+        },
+      })
+    })
+    await clickBySelector(page, '[data-smoke="workspace-layout-profile-export"]')
+    passes.push(await waitForNativeSavedLayoutJson(page, 'workspace config exports non-empty layout JSON through native picker'))
+    await page.evaluate(() => {
+      try {
+        Object.defineProperty(window, 'showSaveFilePicker', {
+          configurable: true,
+          value: undefined,
+        })
+      } catch {
+        // Ignore browsers that expose this property as non-configurable.
+      }
+    })
+    await clickBySelector(page, '[data-smoke="workspace-layout-profile-export"]')
+    passes.push(await waitForDownloadedLayoutJson(downloadDir, 'workspace config exports non-empty layout JSON'))
     await clickBySelector(page, '[data-smoke="workspace-config-close"]')
     passes.push(await waitForGone(page, '[data-smoke="workspace-config-modal"]', 'workspace config modal closes', 5_000))
     passes.push(await waitForSelector(page, '[data-smoke="screen-mode-card"]', 'back from workspace config'))
