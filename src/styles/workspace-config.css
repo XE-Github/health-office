@@ -743,6 +743,24 @@
   max-width: 18ch;
 }
 
+.workspace-three-editor-status-action {
+  justify-self: start;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(119, 158, 139, 0.42);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-primary-deep);
+  font-size: 0.58rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.workspace-three-editor-status-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .workspace-three-selection-card.is-ready .workspace-three-editor-group-status strong {
   color: #1f5f41;
 }

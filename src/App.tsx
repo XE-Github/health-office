@@ -450,6 +450,24 @@ function App() {
     tunedDistanceOffsets,
     tuning.sampledDistanceNormalPercent,
   ])
+  const workspaceCalibrationProgress = useMemo(() => {
+    const screens = normalizedWorkspaceLayout.screens
+    const readyScreens = screens.filter((screen) => {
+      const calibration = normalizedWorkspaceCalibrationStore.screens[screen.id]
+      return Boolean(calibration?.distance && calibration?.posture)
+    })
+    const missingScreens = screens.filter((screen) => {
+      const calibration = normalizedWorkspaceCalibrationStore.screens[screen.id]
+      return !calibration?.distance || !calibration?.posture
+    })
+
+    return {
+      missingLabels: missingScreens.map((screen) => screen.name),
+      ready: screens.length > 0 && readyScreens.length === screens.length,
+      readyCount: readyScreens.length,
+      totalCount: screens.length,
+    }
+  }, [normalizedWorkspaceCalibrationStore, normalizedWorkspaceLayout])
   const profile = useMemo(() => createProfile(tuning, demoMode), [demoMode, tuning])
   const activeDistanceThresholds = useMemo(
     () =>
@@ -545,20 +563,35 @@ function App() {
   const hasDistanceCalibration = activeWorkspaceDistancePreset !== null
   const hasPostureCalibration = Boolean(activeWorkspaceScreenCalibration?.posture)
   const multiScreenConfigured = normalizedWorkspaceLayout.screens.length >= 2
+  const allWorkspaceScreensCalibrated =
+    multiScreenConfigured && workspaceCalibrationProgress.ready
+  const workspaceCalibrationProgressLabel =
+    screenMode === 'multi'
+      ? `${workspaceCalibrationProgress.readyCount}/${workspaceCalibrationProgress.totalCount} 已完成`
+      : hasDistanceCalibration && hasPostureCalibration
+        ? '已完成'
+        : '未完成'
+  const workspaceCalibrationMissingLabel =
+    workspaceCalibrationProgress.missingLabels.length === 0
+      ? '全部屏幕已校准'
+      : `待校准：${workspaceCalibrationProgress.missingLabels.slice(0, 3).join('、')}${
+          workspaceCalibrationProgress.missingLabels.length > 3 ? ' 等' : ''
+        }`
   const screenModeReadyLabel =
     screenMode === null
       ? '请选择单屏或多屏模式'
       : screenMode === 'multi' && !multiScreenConfigured
         ? '请先添加并配置工作屏'
-        : !hasDistanceCalibration || !hasPostureCalibration
-          ? '请完成视距和姿态校准'
-          : '可开始'
+        : screenMode === 'multi' && !allWorkspaceScreensCalibrated
+          ? workspaceCalibrationMissingLabel
+          : screenMode === 'multi'
+            ? '可开始'
+            : !hasDistanceCalibration || !hasPostureCalibration
+              ? '请完成视距和姿态校准'
+              : '可开始'
   const canStartOffice =
-    demoMode ||
-    (screenMode !== null &&
-      (screenMode === 'single' || multiScreenConfigured) &&
-      hasDistanceCalibration &&
-      hasPostureCalibration)
+    (screenMode === 'single' && (demoMode || (hasDistanceCalibration && hasPostureCalibration))) ||
+    (screenMode === 'multi' && allWorkspaceScreensCalibrated)
   const modeTitle =
     screenMode === 'single'
       ? '单屏模式'
@@ -1607,6 +1640,47 @@ function App() {
         : effectiveWorkspaceScreen
           ? `${effectiveWorkspaceScreen.name} · 保持中`
           : formatWorkspaceScreenMatchLabel(workspaceScreenMatch)
+  const workspaceScreenConfidenceLabel =
+    screenMode === 'multi'
+      ? workspaceScreenMatch.status === 'unavailable' || workspaceScreenMatch.status === 'unmatched'
+        ? '暂不可用'
+        : `${Math.round(workspaceScreenMatch.confidence * 100)}%`
+      : screenMode === 'single'
+        ? '单屏无需匹配'
+        : '未选择模式'
+  const workspaceScreenReasonLabel =
+    screenMode !== 'multi'
+      ? screenMode === 'single'
+        ? '单屏模式'
+        : '暂不可用'
+      : workspaceScreenMatch.status === 'switching'
+        ? '正在切换'
+        : workspaceScreenMatch.status === 'unavailable' || workspaceScreenMatch.status === 'unmatched'
+          ? '暂不可用'
+          : workspaceScreenMatch.reason === 'calibrated'
+            ? '逐屏校准'
+            : workspaceScreenMatch.reason === 'layout'
+              ? '3D 布局'
+              : workspaceScreenMatch.reason === 'mixed'
+                ? '混合判断'
+                : '暂不可用'
+  const hasEffectiveDistanceCalibration =
+    screenMode === 'multi'
+      ? Boolean(effectiveWorkspaceCalibration?.distance)
+      : hasDistanceCalibration
+  const hasEffectivePostureCalibration =
+    screenMode === 'multi'
+      ? Boolean(effectiveWorkspaceCalibration?.posture)
+      : hasPostureCalibration
+  const workspaceCalibrationQualityLabel =
+    !hasEffectiveDistanceCalibration && !hasEffectivePostureCalibration
+      ? '待校准'
+      : !hasEffectiveDistanceCalibration || !hasEffectivePostureCalibration
+        ? '需重校准'
+        : screenMode === 'multi' &&
+            (workspaceScreenMatch.status === 'switching' || workspaceScreenMatch.confidence < 0.7)
+          ? '一般'
+          : '稳定'
   const workspaceLayoutProfileCreateLabel = activeWorkspaceLayoutProfile
     ? '另存为新布局'
     : '保存当前布局'
@@ -1759,32 +1833,36 @@ function App() {
       : `${(distanceSignalRatio * 100).toFixed(1)}%`
   const hudDistanceSignalBaselineLabel = `${calibrationCurrentSignalLabel} / ${calibrationBaselineLabel}`
   const hudDistanceThresholdLabel = `${calibrationCloseGapLabel} / ${calibrationFarGapLabel}`
+  const singleCalibrationIncomplete =
+    screenMode !== 'multi' &&
+    (!hasDistanceCalibration || !hasPostureCalibration) &&
+    distanceCalibration.status !== 'sampling' &&
+    postureCalibration.status !== 'sampling'
   const currentAction =
     activeReminder?.guidance[0] ??
     (screenMode === null
       ? '先选择屏幕模式'
       : screenMode === 'multi' && !multiScreenConfigured
         ? '先完成多屏布局配置'
-        : (!hasDistanceCalibration || !hasPostureCalibration) &&
-    distanceCalibration.status !== 'sampling' &&
-    postureCalibration.status !== 'sampling'
-      ? '先完成视距和姿态校准'
-      :
-    (distanceState === 'too-close'
-      ? '后移一点并坐直'
-      : blinkState === 'low-rate'
-        ? '连续轻眨 6 次'
-        : postureState === 'head-down'
-          ? '抬头看向屏幕上沿'
-        : postureState === 'forward-head'
-          ? '轻收下巴并后移'
-          : postureState === 'shoulder-tilt'
-              ? '放平肩线并放松肩颈'
-            : postureState === 'head-tilt'
-                ? '把头轻轻扶正'
-            : eyeTimer.elapsedMs >= profile.eyeFocusMs
-              ? '看向远处 20 秒'
-              : '当前无需干预'))
+        : screenMode === 'multi' && !allWorkspaceScreensCalibrated
+          ? '在多屏配置中完成全部屏幕校准'
+          : singleCalibrationIncomplete
+            ? '先完成视距和姿态校准'
+            : distanceState === 'too-close'
+              ? '后移一点并坐直'
+              : blinkState === 'low-rate'
+                ? '连续轻眨 6 次'
+                : postureState === 'head-down'
+                  ? '抬头看向屏幕上沿'
+                  : postureState === 'forward-head'
+                    ? '轻收下巴并后移'
+                    : postureState === 'shoulder-tilt'
+                      ? '放平肩线并放松肩颈'
+                      : postureState === 'head-tilt'
+                        ? '把头轻轻扶正'
+                        : eyeTimer.elapsedMs >= profile.eyeFocusMs
+                          ? '看向远处 20 秒'
+                          : '当前无需干预')
 
   const primaryReminderLabel = activeReminder
     ? `${activeReminder.severity === 'strong' ? '当前主提醒' : '当前轻提醒'} · ${activeReminder.title}`
@@ -1840,7 +1918,6 @@ function App() {
         { label: '屏幕模式', value: screenModeHudLabel },
         { label: '空间配置', value: workspaceConfigHudLabel },
         { label: '脸屏适配', value: faceAlignmentLabel },
-        { label: '当前工作屏', value: workspaceActiveScreenLabel },
         { label: '工作屏 3D', value: workspaceGeometryLabel },
         { label: '头姿角度', value: faceAlignmentPoseLabel },
         { label: '视距校准', value: cameraFullscreen ? hudCalibrationLabel : calibrationStatusLabel },
@@ -1849,6 +1926,15 @@ function App() {
         { label: '视距基线差值', value: calibrationSignedGapLabel },
         { label: '过近/偏远阈值', value: hudDistanceThresholdLabel },
         { label: '视距状态', value: hasDistanceCalibration ? distanceMeta.label : '未校准' },
+      ],
+    },
+    {
+      title: '多屏识别',
+      rows: [
+        { label: '当前工作屏', value: workspaceActiveScreenLabel },
+        { label: '匹配置信度', value: workspaceScreenConfidenceLabel },
+        { label: '匹配依据', value: workspaceScreenReasonLabel },
+        { label: '校准质量', value: workspaceCalibrationQualityLabel },
       ],
     },
     {
@@ -1885,11 +1971,13 @@ function App() {
       ? '先选择单屏或多屏模式，再进行校准。'
       : screenMode === 'multi' && !multiScreenConfigured
         ? '请先进入多屏配置，添加并确认工作屏位置。'
-        : !hasDistanceCalibration || !hasPostureCalibration
-      ? '先完成视距和姿态校准，再开始相关提醒。'
-      : cameraStatus === 'ready'
-        ? faceAlignmentHelper
-        : cameraMeta.helper)
+        : screenMode === 'multi' && !allWorkspaceScreensCalibrated
+          ? '请在多屏配置中完成全部屏幕校准。'
+          : screenMode !== 'multi' && (!hasDistanceCalibration || !hasPostureCalibration)
+            ? '先完成视距和姿态校准，再开始相关提醒。'
+            : cameraStatus === 'ready'
+              ? faceAlignmentHelper
+              : cameraMeta.helper)
   const handleSessionToggle = () => {
     if (!sessionStarted && !canStartOffice) {
       return
@@ -2017,6 +2105,9 @@ function App() {
       `屏幕模式: ${screenModeHudLabel}`,
       `空间配置: ${workspaceConfigHudLabel}`,
       `当前工作屏: ${workspaceActiveScreenLabel}`,
+      `匹配置信度: ${workspaceScreenConfidenceLabel}`,
+      `匹配依据: ${workspaceScreenReasonLabel}`,
+      `校准质量: ${workspaceCalibrationQualityLabel}`,
       `工作屏 3D: ${workspaceGeometryLabel}`,
       `脸屏适配: ${faceAlignmentLabel}`,
       `头姿角度: ${faceAlignmentPoseLabel}`,
@@ -2222,7 +2313,9 @@ function App() {
             sessionStarted={sessionStarted}
             toggleDemoFlag={toggleDemoFlag}
             triggerEyeDemo={triggerEyeDemo}
-            workspaceActiveScreenLabel={workspaceActiveScreenLabel}
+            workspaceAllScreensCalibrated={allWorkspaceScreensCalibrated}
+            workspaceCalibrationMissingLabel={workspaceCalibrationMissingLabel}
+            workspaceCalibrationProgressLabel={workspaceCalibrationProgressLabel}
           />
 
           <div className="hero-visual">

@@ -56,6 +56,7 @@ export type WorkspaceSceneView = {
 export type WorkspaceScreenCalibrationVisual = {
   className: string
   label: string
+  status: 'empty' | 'partial' | 'ready' | 'sampling'
 }
 
 type WorkspaceThreeBoardProps = {
@@ -289,7 +290,12 @@ function createTextTexture(
   context.fillStyle = options?.textColor ?? '#162433'
   context.textAlign = 'center'
   context.textBaseline = 'middle'
-  const resolvedTitle = Array.isArray(title) ? title[0] ?? '' : title
+  const resolvedLines = (Array.isArray(title) ? title : [title])
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 2)
+  const resolvedTitle = resolvedLines[0] ?? ''
+  const resolvedSubtitle = resolvedLines[1] ?? ''
   const maxTextWidth = Math.max(24, canvas.width - padding * 2.8)
   const maxFontSize = Math.max(42, Math.min(118, Math.round(canvas.height * 0.24)))
   const minFontSize = 34
@@ -306,7 +312,16 @@ function createTextTexture(
   }
 
   context.font = `bold ${fontSize}px sans-serif`
-  context.fillText(resolvedTitle, canvas.width / 2, canvas.height / 2)
+
+  if (resolvedSubtitle) {
+    const subtitleFontSize = Math.max(24, Math.round(fontSize * 0.5))
+    context.fillText(resolvedTitle, canvas.width / 2, canvas.height * 0.44)
+    context.font = `bold ${subtitleFontSize}px sans-serif`
+    context.fillStyle = options?.textColor ?? '#425567'
+    context.fillText(resolvedSubtitle, canvas.width / 2, canvas.height * 0.62)
+  } else {
+    context.fillText(resolvedTitle, canvas.width / 2, canvas.height / 2)
+  }
 
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
@@ -834,7 +849,7 @@ export function WorkspaceThreeBoard({
         color: 0xffffff,
         depthTest: true,
         depthWrite: true,
-        map: createTextTexture(screen.name, {
+        map: createTextTexture([screen.name, calibrationState?.label ?? '未校准'], {
           aspectRatio: screen.width / screen.height,
           backgroundColor: calibrationPalette.backgroundColor,
           borderColor: calibrationPalette.borderColor,
@@ -1270,15 +1285,6 @@ export function WorkspaceThreeBoard({
           设为摄像头屏
         </button>
         <button
-          className="workspace-three-action-button"
-          data-smoke="workspace-screen-calibrate-inline"
-          disabled={!selectedScreen}
-          onClick={() => selectedScreen && onCalibrateScreen(selectedScreen.id)}
-          type="button"
-        >
-          校准屏幕
-        </button>
-        <button
           className="workspace-three-action-button is-danger"
           data-smoke="workspace-delete-screen-inline"
           disabled={!canDeleteSelectedScreen}
@@ -1584,6 +1590,19 @@ export function WorkspaceThreeBoard({
                 </div>
               ) : null}
               <small>{selectedScreenCalibrationHint}</small>
+              <button
+                className="workspace-three-editor-status-action"
+                data-smoke="workspace-screen-calibrate-inline"
+                disabled={selectedScreenState?.status === 'sampling'}
+                onClick={() => onCalibrateScreen(selectedScreen.id)}
+                type="button"
+              >
+                {selectedScreenState?.status === 'sampling'
+                  ? '校准中'
+                  : selectedScreenState?.status === 'ready'
+                    ? '重新校准这块屏幕'
+                    : '校准这块屏幕'}
+              </button>
             </section>
           </div>
         </div>

@@ -19,8 +19,15 @@
     "lint": "eslint .",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "test:side-screen": "node --experimental-strip-types scripts/side-screen-regression.mjs",
-    "smoke": "node scripts/smoke-ui.cjs",
-    "verify": "npm run typecheck && npm run lint && npm run build && npm run smoke"
+    "smoke": "npm run smoke:full",
+    "smoke:quick": "node scripts/smoke-ui.cjs --scope=quick",
+    "smoke:workspace": "node scripts/smoke-ui.cjs --scope=workspace",
+    "smoke:camera": "node scripts/smoke-ui.cjs --scope=camera",
+    "smoke:full": "node scripts/smoke-ui.cjs --scope=full",
+    "verify": "npm run verify:quick",
+    "verify:quick": "npm run typecheck && npm run lint",
+    "verify:build": "npm run typecheck && npm run lint && npm run build",
+    "verify:full": "npm run verify:build && npm run smoke:full"
   },
   "build": {
     "appId": "com.codex.health-office",

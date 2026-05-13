@@ -86,7 +86,7 @@ function getCalibrationState(
   if (hasDistance || hasPosture) {
     return {
       className: 'is-partial',
-      label: '部分校准',
+      label: '需重校准',
       status: 'partial' as const,
     }
   }
@@ -96,6 +96,17 @@ function getCalibrationState(
     label: '未校准',
     status: 'empty' as const,
   }
+}
+
+function getSamplingProgressLabel(distanceLabel: string, postureLabel: string) {
+  const samplingLabel = [distanceLabel, postureLabel].find(
+    (label) =>
+      label.includes('采样中') ||
+      label.includes('等待稳定') ||
+      label.includes('准备中'),
+  )
+
+  return samplingLabel ?? '校准中'
 }
 
 export function WorkspaceConfigPage({
@@ -140,23 +151,23 @@ export function WorkspaceConfigPage({
   const selectedCalibrationTime = formatTime(selectedCalibration?.updatedAt)
   const selectedCalibrationLabel =
     selectedCalibrationState?.status === 'sampling'
-      ? '校准中'
+      ? `校准中 · ${getSamplingProgressLabel(distanceCalibrationLabel, postureCalibrationLabel)}`
       : selectedCalibrationState?.status === 'ready'
         ? `已校准${selectedCalibrationTime ? ` · ${selectedCalibrationTime}` : ''}`
         : selectedCalibrationState?.status === 'partial'
-          ? '部分校准'
+          ? '需重校准'
           : '未校准'
   const selectedCalibrationDetails =
     selectedCalibrationState?.status === 'sampling'
-      ? [`视距：${distanceCalibrationLabel}`, `姿态：${postureCalibrationLabel}`]
+      ? [`看向${selectedScreen?.name ?? '这块屏'}`, '保持 3 到 5 秒']
       : []
   const selectedCalibrationHint =
     selectedCalibrationState?.status === 'sampling'
-      ? '看向这块屏 3 到 5 秒'
+      ? '完成后会保存到当前布局'
       : selectedCalibrationState?.status === 'ready'
         ? '位置变化后重新校准'
         : selectedCalibrationState?.status === 'partial'
-          ? '建议重新校准'
+          ? '请重新校准这块屏幕'
           : '看向这块屏 3 到 5 秒'
   const screenStates = Object.fromEntries(
     layout.screens.map((screen) => [

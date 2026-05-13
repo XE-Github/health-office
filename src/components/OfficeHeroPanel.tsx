@@ -34,7 +34,9 @@ type OfficeHeroPanelProps = {
   sessionStarted: boolean
   toggleDemoFlag: (key: keyof DemoFlags) => void
   triggerEyeDemo: () => void
-  workspaceActiveScreenLabel: string
+  workspaceAllScreensCalibrated: boolean
+  workspaceCalibrationMissingLabel: string
+  workspaceCalibrationProgressLabel: string
 }
 
 export function OfficeHeroPanel({
@@ -65,8 +67,86 @@ export function OfficeHeroPanel({
   sessionStarted,
   toggleDemoFlag,
   triggerEyeDemo,
-  workspaceActiveScreenLabel,
+  workspaceAllScreensCalibrated,
+  workspaceCalibrationMissingLabel,
+  workspaceCalibrationProgressLabel,
 }: OfficeHeroPanelProps) {
+  const isCameraReady = cameraStatus === 'ready' || cameraStatus === 'detecting'
+  const cameraReadinessLabel =
+    isCameraReady
+      ? '摄像头已连接'
+      : cameraStatus === 'requesting'
+        ? '正在请求摄像头'
+        : cameraStatus === 'denied'
+          ? '摄像头被拒绝'
+          : cameraStatus === 'unavailable'
+            ? '摄像头不可用'
+            : '等待授权'
+  const modeReadinessLabel =
+    screenMode === 'single' ? '单屏模式已选' : screenMode === 'multi' ? '多屏模式已选' : '请选择模式'
+  const calibrationReady =
+    screenMode === 'multi'
+      ? workspaceAllScreensCalibrated
+      : hasDistanceCalibration && hasPostureCalibration
+  const calibrationReadinessLabel =
+    screenMode === 'multi'
+      ? workspaceAllScreensCalibrated
+        ? '全部屏幕已校准'
+        : `多屏校准 ${workspaceCalibrationProgressLabel}`
+      : calibrationReady
+        ? '视距和姿态已校准'
+        : '等待校准'
+  const startBlockReason =
+    sessionStarted
+      ? '办公监测中'
+      : canStartOffice
+        ? '已满足开始条件'
+        : screenModeReadyLabel
+  const calibrationFeedback =
+    screenMode === 'multi'
+      ? workspaceAllScreensCalibrated
+        ? '全部屏幕已校准，可以开始办公'
+        : '完成全部屏幕后才能开始办公'
+      : calibrationReady
+        ? '校准完成，可以开始办公'
+        : '完成校准后会自动保存到本地'
+  const readinessItems = [
+    {
+      label: '模式',
+      tone: screenMode ? 'done' : 'todo',
+      value: modeReadinessLabel,
+    },
+    {
+      label: '摄像头',
+      tone: isCameraReady
+        ? 'done'
+        : cameraStatus === 'requesting'
+          ? 'active'
+          : cameraStatus === 'denied' || cameraStatus === 'unavailable'
+            ? 'blocked'
+            : 'todo',
+      value: cameraReadinessLabel,
+    },
+    {
+      label: '校准',
+      tone: calibrationReady ? 'done' : screenMode === null ? 'todo' : 'active',
+      value: calibrationReadinessLabel,
+    },
+    {
+      label: '开始',
+      tone: sessionStarted || canStartOffice ? 'done' : 'blocked',
+      value: startBlockReason,
+    },
+  ] as const
+  const calibrationActionLabel =
+    screenMode === 'multi'
+      ? '打开多屏配置校准'
+      : hasDistanceCalibration || hasPostureCalibration
+        ? '重新校准'
+        : '开始校准'
+  const handleCalibrationAction =
+    screenMode === 'multi' ? onOpenWorkspaceConfig : onBeginCalibration
+
   return (
     <div ref={heroCopyRef} className="hero-copy">
       <div className="hero-title-row">
@@ -141,34 +221,69 @@ export function OfficeHeroPanel({
         <div className="hero-action-meta">
           <small>{primaryReminderLabel} · {demoMode ? 'Demo 加速中' : '真实办公节奏'}</small>
           <small>准备状态：{screenModeReadyLabel}</small>
-          <small>当前工作屏：{workspaceActiveScreenLabel}</small>
         </div>
       </div>
+      <div className="hero-readiness-checklist" data-smoke="readiness-checklist">
+        {readinessItems.map((item) => (
+          <div className={`hero-readiness-item is-${item.tone}`} key={item.label}>
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="hero-start-reason" data-smoke="start-block-reason">
+        {sessionStarted || canStartOffice ? '可以开始办公' : `暂不能开始：${startBlockReason}`}
+      </div>
       <div className="hero-calibration-grid">
-        <div className="hero-calibration-card hero-calibration-card-unified" data-smoke="calibration-card">
+        <div
+          className={`hero-calibration-card hero-calibration-card-unified ${
+            screenMode === 'multi' ? 'is-multi' : ''
+          }`}
+          data-smoke="calibration-card"
+        >
           <div className="hero-calibration-copy">
-            <span>视距和姿态校准</span>
-            <small>{calibrationSamplingHint}</small>
+            <span>{screenMode === 'multi' ? '多屏校准' : '视距和姿态校准'}</span>
+            <small>
+              {screenMode === 'multi'
+                ? '在多屏配置中逐块校准，全部完成后再开始办公'
+                : calibrationSamplingHint}
+            </small>
           </div>
-          <div className="hero-calibration-summary">
-            <div className="hero-calibration-item">
-              <span>视距</span>
-              <strong>{distanceCalibrationEntryLabel}</strong>
+          {screenMode === 'multi' ? (
+            <div className="hero-calibration-summary is-multi">
+              <div className="hero-calibration-item">
+                <span>校准进度</span>
+                <strong>{workspaceCalibrationProgressLabel}</strong>
+              </div>
+              <div className="hero-calibration-item">
+                <span>剩余状态</span>
+                <strong>{workspaceAllScreensCalibrated ? '全部完成' : workspaceCalibrationMissingLabel}</strong>
+              </div>
             </div>
-            <div className="hero-calibration-item">
-              <span>姿态</span>
-              <strong data-smoke="posture-calibration-status">{postureCalibrationEntryLabel}</strong>
+          ) : (
+            <div className="hero-calibration-summary">
+              <div className="hero-calibration-item">
+                <span>视距</span>
+                <strong>{distanceCalibrationEntryLabel}</strong>
+              </div>
+              <div className="hero-calibration-item">
+                <span>姿态</span>
+                <strong data-smoke="posture-calibration-status">{postureCalibrationEntryLabel}</strong>
+              </div>
             </div>
-          </div>
+          )}
           <button
             className="button button-ghost button-compact"
             data-smoke="calibration-trigger"
             disabled={screenMode === null}
-            onClick={onBeginCalibration}
+            onClick={handleCalibrationAction}
             type="button"
           >
-            {hasDistanceCalibration || hasPostureCalibration ? '重新校准' : '开始校准'}
+            {calibrationActionLabel}
           </button>
+          <small className="hero-calibration-feedback" data-smoke="calibration-complete-feedback">
+            {calibrationFeedback}
+          </small>
         </div>
       </div>
       <div className={`hero-demo-strip ${demoMode ? 'is-active' : 'is-inactive'}`}>

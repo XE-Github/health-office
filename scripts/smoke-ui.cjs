@@ -11,6 +11,24 @@ const chromeCandidates = [
 const smokeUrl = process.env.SMOKE_URL || 'http://127.0.0.1:4173/'
 const artifactDir = path.join(process.cwd(), 'test-artifacts')
 const previewWaitMs = 30_000
+const smokeScopes = new Set(['quick', 'workspace', 'camera', 'full'])
+
+function getSmokeScope() {
+  const scopeArg = process.argv.find((arg) => arg.startsWith('--scope='))
+  const scope = scopeArg ? scopeArg.slice('--scope='.length) : process.env.SMOKE_SCOPE || 'full'
+
+  if (!smokeScopes.has(scope)) {
+    throw new Error(`Unsupported smoke scope "${scope}". Use quick, workspace, camera, or full.`)
+  }
+
+  return scope
+}
+
+const smokeScope = getSmokeScope()
+
+function shouldRunScope(scope) {
+  return smokeScope === 'full' || smokeScope === scope
+}
 
 function getExecutablePath() {
   const found = chromeCandidates.find((candidate) => fs.existsSync(candidate))
@@ -95,6 +113,25 @@ async function assertSelectorCount(page, selector, expected, label, timeout = 20
     { timeout },
     selector,
     expected,
+  )
+
+  return `PASS ${label}`
+}
+
+async function assertHudCanReceiveScroll(page, label, timeout = 20_000) {
+  await page.waitForFunction(
+    () => {
+      const hud = document.querySelector('[data-smoke="camera-hud"]')
+
+      if (!(hud instanceof HTMLElement)) {
+        return false
+      }
+
+      const styles = window.getComputedStyle(hud)
+
+      return styles.pointerEvents !== 'none' && styles.overflowY !== 'hidden'
+    },
+    { timeout },
   )
 
   return `PASS ${label}`
@@ -313,6 +350,9 @@ async function run() {
 
     passes.push(await waitForSelector(page, '[data-smoke="app-shell"]', '首页完成加载'))
     passes.push(await waitForSelector(page, '[data-smoke="screen-mode-card"]', '屏幕模式选择默认可见'))
+    passes.push(await waitForSelector(page, '[data-smoke="readiness-checklist"]', '准备清单可见'))
+    passes.push(await waitForSelector(page, '[data-smoke="start-block-reason"]', '开始办公禁用原因可见'))
+    passes.push(await waitForSelector(page, '[data-smoke="calibration-complete-feedback"]', '校准完成反馈区域可见'))
     passes.push(await waitForSelector(page, '[data-smoke="screen-mode-single"]', '单屏模式入口可见'))
     passes.push(await waitForSelector(page, '[data-smoke="screen-mode-multi"]', '多屏模式入口可见'))
     await clickBySelector(page, '[data-smoke="screen-mode-single"]')
@@ -330,6 +370,7 @@ async function run() {
     await clickBySelector(page, '[data-smoke="settings-close"]')
     passes.push(await waitForGone(page, '[data-smoke="settings-modal"]', '设置弹窗可关闭', 5_000))
 
+    if (shouldRunScope('workspace')) {
     await clickBySelector(page, '[data-smoke="screen-mode-multi"]')
     passes.push(await assertSelectorTextIncludes(page, '[data-smoke="screen-mode-card"]', '多屏模式', '可切换多屏模式'))
     passes.push(await waitForSelector(page, '[data-smoke="workspace-config-open"]', 'workspace config open visible'))
@@ -467,12 +508,19 @@ async function run() {
     await clickBySelector(page, '[data-smoke="workspace-config-close"]')
     passes.push(await waitForGone(page, '[data-smoke="workspace-config-modal"]', 'workspace config modal closes', 5_000))
     passes.push(await waitForSelector(page, '[data-smoke="screen-mode-card"]', 'back from workspace config'))
+    }
+
+    if (smokeScope === 'camera') {
+      await clickBySelector(page, '[data-smoke="screen-mode-multi"]')
+      passes.push(await assertSelectorTextIncludes(page, '[data-smoke="screen-mode-card"]', '多屏模式', 'camera smoke can enter multi-screen mode'))
+    }
 
     await page.screenshot({
       path: path.join(artifactDir, 'smoke-home.png'),
       fullPage: true,
     })
 
+    if (shouldRunScope('camera')) {
     await clickBySelector(page, '[data-smoke="camera-request"]')
     await new Promise((resolve) => setTimeout(resolve, 4_000))
     if (consoleFailures.length > 0) {
@@ -483,6 +531,7 @@ async function run() {
     passes.push(await waitForSelector(page, '[data-smoke="camera-hud-toggle"]', 'HUD 显示开关可见'))
     await clickBySelector(page, '[data-smoke="camera-hud-toggle"]')
     passes.push(await waitForSelector(page, '[data-smoke="camera-hud"]', '摄像头入口可正常拉起', 25_000))
+    passes.push(await assertHudCanReceiveScroll(page, 'HUD 可接收滚动事件'))
     passes.push(await waitForSelector(page, '[data-smoke="camera-hud-copy"]', 'HUD 调试快照复制入口可见'))
     passes.push(
       await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '视距信号/基线', 'HUD 合并展示视距信号与基线'),
@@ -514,6 +563,18 @@ async function run() {
     passes.push(
       await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '用眼在岗', 'HUD 展示用眼在岗状态'),
     )
+    passes.push(
+      await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '多屏识别', 'HUD 展示多屏识别分组'),
+    )
+    passes.push(
+      await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '匹配置信度', 'HUD 展示工作屏匹配置信度'),
+    )
+    passes.push(
+      await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '匹配依据', 'HUD 展示工作屏匹配依据'),
+    )
+    passes.push(
+      await assertSelectorTextIncludes(page, '[data-smoke="camera-hud"]', '校准质量', 'HUD 展示工作屏校准质量'),
+    )
 
     passes.push(await waitForSelector(page, '[data-smoke="calibration-trigger"]', '统一校准入口可见'))
 
@@ -529,8 +590,9 @@ async function run() {
     passes.push(await waitForCameraVideoReady(page, '返回 HO 后摄像头视频流仍然可用'))
     passes.push(await waitForSelector(page, '[data-smoke="camera-hud-toggle"]', '返回 HO 后实时窗口操作仍可见'))
 
-    passes.push(await waitForSelector(page, '[data-smoke="posture-calibration-status"]', '姿态校准状态可见'))
+    passes.push(await waitForSelector(page, '[data-smoke="calibration-card"]', '统一校准卡片可见'))
 
+    if (smokeScope === 'full') {
     await clickBySelector(page, '[data-smoke="demo-toggle"]')
     passes.push(await waitForSelector(page, '[data-smoke="demo-trigger-eye"]', 'Demo 快捷条可正常显示'))
     await clickBySelector(page, '[data-smoke="demo-trigger-eye"]')
@@ -538,6 +600,8 @@ async function run() {
     await hoverBySelector(page, '[data-smoke="reminder-toast"]')
     await clickBySelector(page, '[data-smoke="reminder-complete"]')
     passes.push(await waitForGone(page, '[data-smoke="reminder-toast"]', '提醒 toast 可正常完成并关闭'))
+    }
+    }
   } catch (error) {
     await page.screenshot({
       path: path.join(artifactDir, 'smoke-failure.png'),
